@@ -13,7 +13,8 @@ from . import Element, make_task, page
 from .collection_support import accept
 from .inventory_support import (LEVELS, TODAY, has_amount, has_number,
                                 item_url, newest_movement, num)
-from .main_lists_support import (heading_of, key_number, replaced,
+from .main_lists_support import (has_ancestor_class, heading_of, key_number,
+                                 pane_head, pane_widgets, replaced,
                                  texts_of_links, unsorted_reasons)
 from .planning_support import (CONTAINER_COLUMNS_DE, CONTAINER_COLUMNS_EN,
                                DETAIL_KEYS_DE, DETAIL_KEYS_EN, HTMX, PLAN,
@@ -154,6 +155,21 @@ class PaneTests(InspectorCase):
         accept(language="en")
         self.assertIn("(E)-Cinnamic acid",
                       heading_of(self.pane("CH-0012")).text())
+
+    def test_the_head_links_the_page_of_the_articles_substance(
+            self) -> None:
+        self.demo_item()
+        found = self.pane("CH-0012")
+        head = pane_head(found)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"),
+                         "/lab/registry/substances/cinnamic-acid/")
+        self.assertTrue(pane_widgets(found))
+        for each in pane_widgets(found):
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+            self.assertIsNotNone(has_ancestor_class(each, "widget-grid"))
 
     def test_both_parts_in_german_and_english(self) -> None:
         self.planned_item("NV-1", quantity=10)

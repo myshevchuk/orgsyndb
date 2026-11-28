@@ -9,12 +9,14 @@ import shutil
 import subprocess
 from pathlib import Path
 from unittest import skipUnless
+from urllib.parse import parse_qs, urlsplit
 
 from django.test import SimpleTestCase, TestCase
 
 from . import (REPO, make_batch, make_item, make_substance, make_task,
                make_user, make_vessel, page, shell_scripts, test_shell)
 from .inventory_support import NEW_ITEM, NEW_NOTE
+from .main_lists_support import must_outer_split
 from .planning_support import PLAN, PlanningCase
 
 NODE = shutil.which("node")
@@ -26,7 +28,8 @@ LAB_JS = STATIC / "lab.js"
 LAB_CSS = STATIC / "lab.css"
 
 EXPECTED_CONTROLLERS = [
-    "split-list",
+    "master-detail",
+    "split",
     "sortable-table",
     "dialog",
     "popover-anchor",
@@ -182,6 +185,9 @@ function createHarness(options = {}) {
         } else if (rest.startsWith("disabled")) {
           if (!el.disabled) return false;
           i += 9;
+        } else if (rest.startsWith("popover-open")) {
+          if (!el.hasAttribute("popover") || !el._popoverOpen) return false;
+          i += 13;
         } else if (rest.startsWith("not(") || rest.startsWith("is(")) {
           const isNot = rest.startsWith("not(");
           let depth = 0;
@@ -482,6 +488,7 @@ function createHarness(options = {}) {
       this.scrollTop = 0;
       this.scrollLeft = 0;
       this.popoverHiddenCount = 0;
+      this._popoverOpen = false;
       const el = this;
       this.classList = {
         contains(name) {
@@ -716,7 +723,11 @@ function createHarness(options = {}) {
       this.open = false;
       this.dispatchEvent(new Event("close"));
     }
-    hidePopover() { this.popoverHiddenCount += 1; }
+    showPopover() { this._popoverOpen = true; }
+    hidePopover() {
+      this.popoverHiddenCount += 1;
+      this._popoverOpen = false;
+    }
     getBoundingClientRect() { return { ...this._rect }; }
   }
 
@@ -1075,6 +1086,209 @@ def run_node_test(body: str) -> dict:
     return json.loads(done.stdout)
 
 
+# A category list's page in the details view: an outer split of the
+# substances and the pane of the selected substance `a`, which holds an
+# inner split of its lots and the details of the selected lot `2`. The
+# page names both selections in its address and its filter form.
+NESTED_HTML = r"""
+    <p id="list-summary"><a id="reset-link"
+       href="/lab/inventory/intermediates/?selected=a&lot=2"
+       hx-get="/lab/inventory/intermediates/?selected=a&lot=2">Reset</a></p>
+    <form id="filters" class="lab-filters"
+          hx-get="/lab/inventory/intermediates/">
+      <span id="filter-selected">
+        <input type="hidden" name="selected" value="a">
+        <input type="hidden" name="lot" value="2">
+      </span>
+    </form>
+    <div id="view-bar">
+      <input type="radio" id="view-table" name="view" value="table">
+      <input type="radio" id="view-details" name="view" value="details"
+             checked>
+      <button type="button" id="toggle"
+              data-lab-action="click->split#toggle">Larger</button>
+      <a id="outside-link" href="/lab/inventory/batches/new/"
+         data-dialog>New batch</a>
+    </div>
+    <div id="outer" class="split split--outer split--rows"
+         data-major="first" data-controller="split master-detail"
+         data-view="details" data-cookie="intermediate-list-view"
+         data-split-cookie-value="intermediate-list-split"
+         data-master-detail-level-value="outer"
+         data-master-detail-rows-value="item-rows"
+         data-master-detail-pane-value="item-detail"
+         data-master-detail-param-value="selected">
+      <div class="split__pane">
+        <div class="table-scroll table-sticky">
+          <table class="main-table">
+            <thead id="item-head"><tr><th><a id="sort-link"
+              href="/lab/inventory/intermediates/?sort=amount&selected=a&lot=2"
+              hx-get="/lab/inventory/intermediates/?sort=amount&selected=a&lot=2"
+              >Amount</a></th></tr></thead>
+            <tbody id="item-rows" data-refresh>
+              <tr id="o1" data-item="a" aria-current="true"
+                  hx-get="/lab/inventory/intermediates/a/"><td id="oc1">A</td>
+              </tr>
+              <tr id="o2" data-item="b"
+                  hx-get="/lab/inventory/intermediates/b/"><td id="oc2">B</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="split__pane">
+        <aside id="item-detail" data-item="a" data-refresh>
+          <header class="pane-head">
+            <h2 id="item-detail-title">A</h2>
+            <button type="button" popovertarget="item-actions">Actions
+            </button>
+            <div id="item-actions" popover><a id="item-edit"
+              href="/lab/inventory/batches/new/?substance=a"
+              data-dialog>New batch</a></div>
+          </header>
+          <div id="inner" class="split split--columns" data-major="first"
+               data-controller="master-detail"
+               data-master-detail-level-value="inner"
+               data-master-detail-rows-value="lot-rows"
+               data-master-detail-pane-value="lot-detail"
+               data-master-detail-param-value="lot">
+            <div class="split__pane">
+              <table id="category-lots" class="main-table">
+                <thead><tr><th>Vessel</th></tr></thead>
+                <tbody id="lot-rows">
+                  <tr id="l1" data-item="1"
+                      hx-get="/lab/inventory/intermediates/a/lots/1/">
+                    <td id="lc1">1</td></tr>
+                  <tr id="l2" data-item="2" aria-current="true"
+                      hx-get="/lab/inventory/intermediates/a/lots/2/">
+                    <td id="lc2">2</td></tr>
+                  <tr id="l3" data-item="3"
+                      hx-get="/lab/inventory/intermediates/a/lots/3/">
+                    <td id="lc3">3</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="split__pane">
+              <aside id="lot-detail" data-item="2">
+                <header class="pane-head">
+                  <h2 id="lot-detail-title">#2</h2>
+                  <button type="button" popovertarget="lot-actions">Actions
+                  </button>
+                  <div id="lot-actions" popover><a id="lot-edit"
+                    href="/lab/inventory/vessels/2/edit/"
+                    data-dialog>Edit</a></div>
+                </header>
+              </aside>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <dialog id="lab-dialog" class="lab-dialog" data-controller="dialog">
+      <div id="lab-dialog-body"></div>
+      <button type="button" class="lab-dialog-close">Close</button>
+    </dialog>
+"""
+
+# The same page after a booking: the lot `2` is gone, the pane names the
+# lot `1`, and no row is marked, so that the script has to mark them.
+NESTED_AFTER_SAVE = (
+    "<!DOCTYPE html><html><head><title>Updated</title></head><body>"
+    '<main id="main">' + NESTED_HTML
+    .replace('<tr id="o1" data-item="a" aria-current="true"',
+             '<tr id="o1" data-item="a"')
+    .replace('<tr id="l2" data-item="2" aria-current="true"',
+             '<tr id="l2" data-item="2"')
+    .replace('<aside id="lot-detail" data-item="2">',
+             '<aside id="lot-detail" data-item="1">')
+    + "</main></body></html>")
+
+# Swaps in the pane of the substance `b`, whose first lot is `11`.
+NEXT_ITEM_PANE = r"""
+const nextItemPane = () => {
+  const parsed = new h.context.DOMParser().parseFromString(`
+    <aside id="item-detail" data-item="b" data-refresh>
+      <div id="inner" class="split split--columns" data-major="first"
+           data-controller="master-detail"
+           data-master-detail-level-value="inner"
+           data-master-detail-rows-value="lot-rows"
+           data-master-detail-pane-value="lot-detail"
+           data-master-detail-param-value="lot">
+        <div class="split__pane">
+          <table id="category-lots" class="main-table"><tbody id="lot-rows">
+            <tr id="m11" data-item="11"
+                hx-get="/lab/inventory/intermediates/b/lots/11/">
+              <td>11</td></tr>
+          </tbody></table>
+        </div>
+        <div class="split__pane">
+          <aside id="lot-detail" data-item="11"></aside>
+        </div>
+      </div>
+    </aside>`, "text/html");
+  return h.doc.adoptNode(parsed.body.children[0]);
+};
+"""
+
+
+def nested_script(body: str, **options: str) -> str:
+    """The Node script BODY on a harness holding ``NESTED_HTML``, with
+    helpers: ``triggers()``, ``clicked(id)``, ``fields()``, ``flow(row,
+    pane)`` and ``nextItemPane()``."""
+    setup = (
+        "const fetched = [];\n"
+        "const h = createHarness({\n"
+        '  pathname: "/lab/inventory/intermediates/",\n'
+        '  search: "?selected=a&lot=2",\n'
+        "  fetch: async (url) => {\n"
+        "    fetched.push(String(url));\n"
+        "    return { ok: true, status: 200, redirected: false,\n"
+        "             async text() { return REFRESHED; } };\n"
+        "  },\n"
+        "  bodyHtml: `__NESTED__`,\n"
+        "});\n"
+        "await h.flush();\n"
+        "const REFRESHED = `__AFTER__`;\n")
+    helpers = r"""
+const triggers = () => h.htmxCalls.filter((c) => c.kind === "trigger");
+// The ids of the rows that one click on ID makes htmx trigger.
+const clicked = (id) => {
+  const before = triggers().length;
+  h.fire(h.doc.getElementById(id), "click", { button: 0 });
+  return triggers().slice(before).map((c) => c.el.id);
+};
+const stepped = (id, key) => {
+  const before = triggers().length;
+  h.fire(h.doc.getElementById(id), "keydown", { key });
+  return triggers().slice(before).map((c) => c.el.id);
+};
+const field = (name) => {
+  const found = h.doc.querySelector(`#filter-selected input[name=${name}]`);
+  return found ? found.value : null;
+};
+const search = () => new URLSearchParams(h.locationObj.search);
+// What htmx does once the row ROW has asked for PANE: the request, the
+// swap of the pane and the end of the request.
+const flow = (row, pane, old) => {
+  h.fireCustom(row, "htmx:beforeRequest", { elt: row });
+  old.replaceWith(pane);
+  h.fireCustom(pane, "htmx:afterSwap", {
+    target: pane, requestConfig: { elt: row } });
+  h.fireCustom(row, "htmx:afterRequest", { elt: row });
+};
+const paneLike = (id, item) => {
+  const found = h.doc.createElement("aside");
+  found.id = id;
+  found.setAttribute("data-item", item);
+  return found;
+};
+"""
+    after = NESTED_AFTER_SAVE.replace("`", "")
+    return (setup.replace("__NESTED__", NESTED_HTML)
+            .replace("__AFTER__", after)
+            + helpers + NEXT_ITEM_PANE + body)
+
+
 class VendoredStimulusTests(SimpleTestCase):
     """Static and CSP compliance checks for vendored Stimulus."""
 
@@ -1163,7 +1377,7 @@ class AnchorPositioningCSSTests(SimpleTestCase):
 class StimulusControllerTests(SimpleTestCase):
     """Unit and lifecycle checks for Stimulus controllers in lab.js."""
 
-    def test_custom_schema_and_all_five_controllers_registered(self) -> None:
+    def test_custom_schema_and_all_controllers_registered(self) -> None:
         result = run_node_test(r"""
 const h = createHarness({
   bodyHtml: `
@@ -1261,7 +1475,7 @@ process.stdout.write(JSON.stringify({
                 self.assertEqual(fallback["resizedTop"], "52px")
                 self.assertEqual(fallback["afterCloseTop"], "52px")
 
-    def test_split_list_htmx_timing_abort_swap_and_reconnect(self) -> None:
+    def test_master_detail_htmx_timing_abort_swap_and_reconnect(self) -> None:
         result = run_node_test(r"""
 const h = createHarness({
   pathname: "/lab/inventory/end-products/",
@@ -1285,9 +1499,15 @@ const h = createHarness({
       <button type="button" id="stray-btn"
               popovertarget="columns-menu">Columns</button>
     </div>
-    <div id="layout" class="item-layout" data-controller="split-list"
-         data-split-list-mode-value="htmx" data-view="table"
-         data-cookie="item-list-view">
+    <div id="layout" class="split split--outer split--rows"
+         data-major="first" data-controller="split master-detail"
+         data-view="table" data-cookie="item-list-view"
+         data-split-cookie-value="item-list-split"
+         data-master-detail-level-value="outer"
+         data-master-detail-rows-value="item-rows"
+         data-master-detail-pane-value="item-detail"
+         data-master-detail-param-value="selected">
+      <div class="split__pane">
       <div class="table-scroll">
         <table class="main-table">
           <thead><tr><th><a id="sort-link"
@@ -1302,7 +1522,10 @@ const h = createHarness({
           </tbody>
         </table>
       </div>
+      </div>
+      <div class="split__pane">
       <aside id="item-detail" data-item="1">Detail 1</aside>
+      </div>
     </div>
   `,
 });
@@ -1441,14 +1664,20 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["triggersAddedOnReconnectClick"], 1)
         self.assertIs(result["strayDisabledInDetails"], False)
 
-    def test_split_list_selects_the_rows_of_a_main_table(self) -> None:
+    def test_master_detail_selects_the_rows_of_its_own_tbody(self) -> None:
         result = run_node_test(r"""
 const h = createHarness({
   pathname: "/lab/tasks/",
   bodyHtml: `
-    <div id="layout" class="item-layout" data-controller="split-list"
-         data-split-list-mode-value="htmx" data-view="details"
-         data-cookie="task-list-view">
+    <div id="layout" class="split split--outer split--rows"
+         data-major="first" data-controller="split master-detail"
+         data-view="details" data-cookie="task-list-view"
+         data-split-cookie-value="task-list-split"
+         data-master-detail-level-value="outer"
+         data-master-detail-rows-value="item-rows"
+         data-master-detail-pane-value="item-detail"
+         data-master-detail-param-value="selected">
+      <div class="split__pane">
       <div class="table-scroll">
         <table class="main-table" id="main">
           <thead><tr><th><a id="sort-link"
@@ -1478,7 +1707,10 @@ const h = createHarness({
           </tbody>
         </table>
       </div>
+      </div>
+      <div class="split__pane">
       <aside id="item-detail" data-item="T-1">Detail 1</aside>
+      </div>
     </div>
   `,
 });
@@ -1511,91 +1743,6 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["afterDown"], [["r2", "item-select"]])
         self.assertEqual(result["afterOld"], 0)
         self.assertEqual(result["focused"], "r2")
-
-    def test_split_list_has_no_local_mode(self) -> None:
-        """The planning list's local mode, its filter buttons, its
-        immediate selection and its blocks are gone: a page that still
-        names the mode keeps its links, its buttons and its rows to the
-        browser."""
-        result = run_node_test(r"""
-const h = createHarness({
-  pathname: "/lab/planning/",
-  bodyHtml: `
-    <div id="grid" class="planning-grid" data-controller="split-list"
-         data-split-list-mode-value="local">
-      <section class="planning-list">
-        <span data-planning-count>3</span>
-        <div class="planning-filters" hidden>
-          <button type="button" data-plan-filter="all"
-                  aria-pressed="true">All</button>
-          <button type="button" data-plan-filter="high"
-                  aria-pressed="false">High</button>
-          <button type="button" data-plan-filter="action"
-                  aria-pressed="false">Action</button>
-          <button type="button" data-plan-filter="late"
-                  aria-pressed="false">Late</button>
-        </div>
-        <table id="planning-list" data-sortable>
-          <tbody>
-            <tr id="p-1" data-article="NV-1" data-priority="high"
-                data-action="1" aria-current="true">
-              <td><a class="planning-select"
-                     href="?selected=NV-1">NV-1</a></td>
-            </tr>
-            <tr id="p-2" data-article="NV-2" data-priority="medium"
-                data-late="1">
-              <td><a id="sel-2" class="planning-select"
-                     href="?selected=NV-2">NV-2</a></td>
-            </tr>
-            <tr id="p-3" data-article="NV-3" data-priority="low">
-              <td><a class="planning-select"
-                     href="?selected=NV-3">NV-3</a></td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="planning-no-match" hidden>No row matches.</p>
-        <p class="planning-status" data-text="Rows shown: {n}"></p>
-      </section>
-      <aside class="planning-inspector">
-        <div id="b-1" data-article="NV-1">Block 1</div>
-        <div id="b-2" data-article="NV-2" hidden>Block 2</div>
-        <div id="b-3" data-article="NV-3" hidden>Block 3</div>
-      </aside>
-    </div>
-  `,
-});
-await h.flush();
-const filters = h.doc.querySelector(".planning-filters");
-const count = h.doc.querySelector("[data-planning-count]");
-const [r1, r2, r3] = ["p-1", "p-2", "p-3"].map(
-  (id) => h.doc.getElementById(id));
-const [b1, b2, b3] = ["b-1", "b-2", "b-3"].map(
-  (id) => h.doc.getElementById(id));
-const linkEv = h.fire(h.doc.getElementById("sel-2"), "click", { button: 0 });
-h.fire(r2, "keydown", { key: "ArrowDown" });
-h.fire(h.doc.querySelector('button[data-plan-filter="action"]'), "click",
-       { button: 0 });
-process.stdout.write(JSON.stringify({
-  filtersHidden: filters.hidden,
-  prevented: linkEv.defaultPrevented,
-  current: [r1, r2, r3].map((r) => r.getAttribute("aria-current")),
-  blocksHidden: [b1.hidden, b2.hidden, b3.hidden],
-  rowsHidden: [r1.hidden, r2.hidden, r3.hidden],
-  count: count.textContent,
-  search: h.locationObj.search,
-  triggers: h.htmxCalls.length,
-}));
-""")
-        self.assertEqual(result, {
-            "filtersHidden": True,
-            "prevented": False,
-            "current": ["true", None, None],
-            "blocksHidden": [False, True, True],
-            "rowsHidden": [False, False, False],
-            "count": "3",
-            "search": "",
-            "triggers": 0,
-        })
 
     def test_dialog_and_sortable_table_morph_and_reconnect(self) -> None:
         result = run_node_test(r"""
@@ -1952,6 +2099,330 @@ process.stdout.write(JSON.stringify({
         })
 
 
+@skipUnless(NODE, "node is not installed")
+class NestedSplitTests(SimpleTestCase):
+    """Two levels of ``master-detail`` on one page, and the ``split``
+    controller (web-app: Main lists, Views, Live lists; end-product-
+    inventory: Lists by substance)."""
+
+    def test_each_level_ignores_the_rows_of_the_other(self) -> None:
+        result = run_node_test(nested_script(r"""
+const outerClick = clicked("oc2");
+const lotClick = clicked("lc3");
+const outerKey = stepped("o1", "ArrowDown");
+const lotDown = stepped("l2", "ArrowDown");
+const lotUp = stepped("l2", "ArrowUp");
+const lotLast = stepped("l3", "ArrowDown");
+const lotFirst = stepped("l1", "ArrowUp");
+const outerLast = stepped("o2", "ArrowDown");
+const withLink = clicked("lot-edit");
+process.stdout.write(JSON.stringify({
+  outerClick, lotClick, outerKey, lotDown, lotUp, lotLast, lotFirst,
+  outerLast, withLink,
+}));
+"""))
+        self.assertEqual(result, {
+            "outerClick": ["o2"], "lotClick": ["l3"],
+            "outerKey": ["o2"], "lotDown": ["l3"], "lotUp": ["l1"],
+            "lotLast": [], "lotFirst": [], "outerLast": [],
+            "withLink": []})
+
+    def test_the_arrow_keys_focus_the_row_they_move_to(self) -> None:
+        result = run_node_test(nested_script(r"""
+stepped("l2", "ArrowDown");
+const lotFocus = h.doc.activeElement && h.doc.activeElement.id;
+stepped("o1", "ArrowDown");
+const outerFocus = h.doc.activeElement && h.doc.activeElement.id;
+process.stdout.write(JSON.stringify({ lotFocus, outerFocus }));
+"""))
+        self.assertEqual(result, {"lotFocus": "l3", "outerFocus": "o2"})
+
+    def test_a_lot_click_writes_the_lot_and_keeps_the_selection(
+            self) -> None:
+        result = run_node_test(nested_script(r"""
+const row = h.doc.getElementById("l3");
+const lotPane = h.doc.getElementById("lot-detail");
+const outerPane = h.doc.getElementById("item-detail");
+h.fire(h.doc.getElementById("lc3"), "click", { button: 0 });
+h.fireCustom(row, "htmx:beforeRequest", { elt: row });
+const pending = {
+  current: ["o1", "l1", "l2", "l3"].map(
+    (id) => h.doc.getElementById(id).getAttribute("aria-current")),
+  search: h.locationObj.search,
+  lot: field("lot"),
+};
+h.fireCustom(row, "htmx:afterRequest", { elt: row });
+const aborted = { search: h.locationObj.search, lot: field("lot") };
+h.fire(h.doc.getElementById("lc3"), "click", { button: 0 });
+flow(row, paneLike("lot-detail", "3"), lotPane);
+const after = {
+  current: ["o1", "o2", "l1", "l2", "l3"].map(
+    (id) => h.doc.getElementById(id).getAttribute("aria-current")),
+  search: h.locationObj.search,
+  selected: field("selected"),
+  lot: field("lot"),
+  sort: h.doc.getElementById("sort-link").getAttribute("href"),
+  sortHx: h.doc.getElementById("sort-link").getAttribute("hx-get"),
+  reset: h.doc.getElementById("reset-link").getAttribute("href"),
+  outerPane: h.doc.getElementById("item-detail") === outerPane,
+};
+process.stdout.write(JSON.stringify({ pending, aborted, after }));
+"""))
+        self.assertEqual(result["pending"], {
+            "current": ["true", None, "true", None],
+            "search": "?selected=a&lot=2", "lot": "2"})
+        self.assertEqual(result["aborted"],
+                         {"search": "?selected=a&lot=2", "lot": "2"})
+        base = "/lab/inventory/intermediates/"
+        self.assertEqual(result["after"], {
+            "current": ["true", None, None, None, "true"],
+            "search": "?selected=a&lot=3", "selected": "a", "lot": "3",
+            "sort": f"{base}?sort=amount&selected=a&lot=3",
+            "sortHx": f"{base}?sort=amount&selected=a&lot=3",
+            "reset": f"{base}?selected=a&lot=3",
+            "outerPane": True})
+
+    def test_an_outer_selection_drops_the_lot(self) -> None:
+        result = run_node_test(nested_script(r"""
+const row = h.doc.getElementById("o2");
+h.fire(h.doc.getElementById("oc2"), "click", { button: 0 });
+flow(row, nextItemPane(), h.doc.getElementById("item-detail"));
+await h.flush();
+const lotField = field("lot");
+process.stdout.write(JSON.stringify({
+  current: ["o1", "o2"].map(
+    (id) => h.doc.getElementById(id).getAttribute("aria-current")),
+  selected: search().get("selected"),
+  lot: search().get("lot"),
+  selectedField: field("selected"),
+  lotField,
+  sort: h.doc.getElementById("sort-link").getAttribute("href"),
+}));
+"""))
+        self.assertEqual(result["current"], [None, "true"])
+        self.assertEqual(result["selected"], "b")
+        self.assertEqual(result["selectedField"], "b")
+        # Neither the address, nor the field, nor a link names the lot of
+        # the substance `a`; the new pane may bring its own.
+        self.assertIn(result["lot"], (None, "11"))
+        self.assertIn(result["lotField"], (None, "", "11"))
+        self.assertNotIn("lot=2", result["sort"])
+        self.assertIn("selected=b", result["sort"])
+
+    def test_the_lot_level_marks_its_rows_from_the_pane_after_a_swap(
+            self) -> None:
+        result = run_node_test(nested_script(r"""
+const lotPane = h.doc.getElementById("lot-detail");
+const next = paneLike("lot-detail", "1");
+lotPane.replaceWith(next);
+h.fireCustom(next, "htmx:afterSwap", {
+  target: next, requestConfig: { elt: h.doc.getElementById("l1") } });
+process.stdout.write(JSON.stringify({
+  current: ["l1", "l2", "l3"].map(
+    (id) => h.doc.getElementById(id).getAttribute("aria-current")),
+  lot: search().get("lot"), selected: search().get("selected"),
+}));
+"""))
+        self.assertEqual(result, {"current": ["true", None, None],
+                                  "lot": "1", "selected": "a"})
+
+    def test_lot_rows_are_focusable_again_after_their_body_is_morphed(
+            self) -> None:
+        result = run_node_test(nested_script(r"""
+const body = h.doc.getElementById("lot-rows");
+for (const row of [...body.children]) row.remove();
+const fresh = [];
+for (const id of ["n1", "n2"]) {
+  const row = h.doc.createElement("tr");
+  row.id = id;
+  row.setAttribute("data-item", id);
+  row.setAttribute("hx-get", `/lab/inventory/intermediates/a/lots/${id}/`);
+  row.tabIndex = 99;
+  body.appendChild(row);
+  fresh.push(row);
+}
+await h.flush();
+const pane = h.doc.getElementById("item-detail");
+for (const name of ["htmx:oobAfterSwap", "htmx:afterSwap",
+                    "htmx:afterSettle"]) {
+  h.fireCustom(pane, name, { target: pane, elt: pane });
+}
+await h.flush();
+const lotClick = clicked("n2");
+process.stdout.write(JSON.stringify({
+  tabIndex: fresh.map((row) => row.tabIndex), lotClick,
+}));
+"""))
+        self.assertEqual(result["tabIndex"], [-1, -1])
+        self.assertEqual(result["lotClick"], ["n2"])
+
+    def test_only_the_outer_level_handles_the_view_switch(self) -> None:
+        result = run_node_test(nested_script(r"""
+const writes = [];
+let jar = "";
+Object.defineProperty(h.doc, "cookie", {
+  get: () => jar, set: (value) => { writes.push(value); jar = value; },
+});
+const outer = h.doc.getElementById("outer");
+const inner = h.doc.getElementById("inner");
+const before = outer.getAttribute("data-view");
+h.doc.getElementById("view-details").checked = false;
+h.doc.getElementById("view-table").checked = true;
+h.fire(h.doc.getElementById("view-table"), "change");
+await h.flush();
+process.stdout.write(JSON.stringify({
+  before, after: outer.getAttribute("data-view"), writes,
+  outerScripted: outer.hasAttribute("data-scripted"),
+  innerScripted: inner.hasAttribute("data-scripted"),
+  innerView: inner.hasAttribute("data-view"),
+}));
+"""))
+        self.assertEqual(result["before"], "details")
+        self.assertEqual(result["after"], "table")
+        self.assertEqual(len(result["writes"]), 1, result["writes"])
+        self.assertTrue(
+            result["writes"][0].startswith("intermediate-list-view=table"))
+        self.assertTrue(result["outerScripted"])
+        self.assertFalse(result["innerScripted"])
+        self.assertFalse(result["innerView"])
+
+    def test_the_toggle_swaps_the_larger_side_and_remembers_it(
+            self) -> None:
+        result = run_node_test(nested_script(r"""
+const writes = [];
+let jar = "";
+Object.defineProperty(h.doc, "cookie", {
+  get: () => jar, set: (value) => { writes.push(value); jar = value; },
+});
+const outer = h.doc.getElementById("outer");
+const inner = h.doc.getElementById("inner");
+const majors = [outer.getAttribute("data-major")];
+h.fire(h.doc.getElementById("toggle"), "click", { button: 0 });
+majors.push(outer.getAttribute("data-major"));
+h.fire(h.doc.getElementById("toggle"), "click", { button: 0 });
+majors.push(outer.getAttribute("data-major"));
+process.stdout.write(JSON.stringify({
+  majors, writes, inner: inner.getAttribute("data-major"),
+  view: outer.getAttribute("data-view"),
+  triggers: triggers().length,
+}));
+"""))
+        self.assertEqual(result["majors"], ["first", "second", "first"])
+        self.assertEqual(result["inner"], "first")
+        self.assertEqual(result["view"], "details")
+        self.assertEqual(result["triggers"], 0)
+        self.assertEqual(len(result["writes"]), 2, result["writes"])
+        for write, side in zip(result["writes"], ("second", "first")):
+            parts = [part.strip() for part in write.split(";")]
+            self.assertEqual(parts[0], f"intermediate-list-split={side}")
+            self.assertIn("path=/lab/inventory/intermediates/", parts)
+            self.assertIn("SameSite=Lax", parts)
+            self.assertIn("max-age=31536000", [p.lower() for p in parts])
+
+    def test_a_dialog_hides_the_popover_that_holds_its_link(self) -> None:
+        result = run_node_test(nested_script(r"""
+const order = [];
+const realAjax = h.context.htmx.ajax;
+h.context.htmx.ajax = (...args) => {
+  order.push("ajax");
+  realAjax(...args);
+};
+const popovers = {};
+for (const id of ["item-actions", "lot-actions"]) {
+  const popover = h.doc.getElementById(id);
+  popover._popoverOpen = true;
+  const hide = popover.hidePopover.bind(popover);
+  popover.hidePopover = () => { order.push(`hide ${id}`); hide(); };
+  popovers[id] = popover;
+}
+h.fire(h.doc.getElementById("lot-edit"), "click", { button: 0 });
+const afterLot = [...order];
+const lotLeft = popovers["item-actions"]._popoverOpen;
+const dialog = h.doc.getElementById("lab-dialog");
+// Close the dialog again and open another from the outer pane.
+const body = h.doc.getElementById("lab-dialog-body");
+h.fireCustom(body, "htmx:afterSwap", { target: body });
+dialog.close();
+order.length = 0;
+popovers["item-actions"]._popoverOpen = true;
+h.fire(h.doc.getElementById("item-edit"), "click", { button: 0 });
+const afterItem = [...order];
+h.fireCustom(body, "htmx:afterSwap", { target: body });
+dialog.close();
+order.length = 0;
+h.fire(h.doc.getElementById("outside-link"), "click", { button: 0 });
+process.stdout.write(JSON.stringify({
+  afterLot, lotLeft, afterItem, afterOutside: [...order],
+}));
+"""))
+        self.assertEqual(result["afterLot"], ["hide lot-actions", "ajax"])
+        self.assertTrue(result["lotLeft"])
+        self.assertEqual(result["afterItem"], ["hide item-actions", "ajax"])
+        self.assertEqual(result["afterOutside"], ["ajax"])
+
+    def refresh_flow(self, opener: str) -> dict:
+        """Open the dialog from the link OPENER, save, and read the page
+        after its refresh."""
+        return run_node_test(nested_script(r"""
+const body = h.doc.getElementById("lab-dialog-body");
+const dialog = h.doc.getElementById("lab-dialog");
+const rowsOf = (ids) => ids.map((id) => h.doc.getElementById(id));
+// What a morph leaves: rows the script has not made focusable yet.
+for (const row of rowsOf(["o1", "o2", "l1", "l2", "l3"])) {
+  row.tabIndex = 99;
+}
+h.fire(h.doc.getElementById("__OPENER__"), "click", { button: 0 });
+const form = h.doc.createElement("form");
+body.appendChild(form);
+h.fireCustom(body, "htmx:afterSwap", { target: body });
+h.fireCustom(form, "lab-saved");
+await new Promise((resolve) => setTimeout(resolve, 20));
+await h.flush();
+process.stdout.write(JSON.stringify({
+  fetched,
+  open: dialog.open,
+  current: ["o1", "o2", "l1", "l2", "l3"].map(
+    (id) => h.doc.getElementById(id).getAttribute("aria-current")),
+  tabIndex: rowsOf(["o1", "o2", "l1", "l2", "l3"]).map(
+    (row) => row.tabIndex),
+  search: h.locationObj.search,
+  selected: field("selected"),
+  lot: field("lot"),
+  focused: h.doc.activeElement && h.doc.activeElement.id,
+}));
+""".replace("__OPENER__", opener)))
+
+    def test_a_save_restores_both_levels(self) -> None:
+        result = self.refresh_flow("lot-edit")
+        self.assertFalse(result["open"])
+        self.assertEqual(len(result["fetched"]), 1)
+        asked = urlsplit(result["fetched"][0])
+        self.assertEqual(asked.path, "/lab/inventory/intermediates/")
+        self.assertEqual(parse_qs(asked.query),
+                         {"selected": ["a"], "lot": ["2"]})
+        # The pane now names the lot 1: both levels mark their rows from
+        # their panes, and the lot is in the field and the address.
+        self.assertEqual(result["current"], ["true", None, "true", None,
+                                             None])
+        self.assertEqual(result["tabIndex"], [-1] * 5)
+        self.assertEqual(result["selected"], "a")
+        self.assertEqual(result["lot"], "1")
+        self.assertEqual(parse_qs(result["search"][1:]),
+                         {"selected": ["a"], "lot": ["1"]})
+
+    def test_a_save_focuses_the_title_of_the_pane_of_the_opener(
+            self) -> None:
+        for opener, title in (("lot-edit", "lot-detail-title"),
+                              ("item-edit", "item-detail-title")):
+            with self.subTest(opener=opener):
+                self.assertEqual(self.refresh_flow(opener)["focused"],
+                                 title)
+
+    def test_a_save_focuses_an_opener_that_is_in_no_popover(self) -> None:
+        self.assertEqual(self.refresh_flow("outside-link")["focused"],
+                         "outside-link")
+
+
 class TemplateWiringTests(PlanningCase):
     """Rendered pages attach the Stimulus data-controller attributes."""
 
@@ -1973,9 +2444,9 @@ class TemplateWiringTests(PlanningCase):
         root = self.check_page("/lab/inventory/end-products/")
         self.assertIn("dialog",
                       self.controllers(root.find("dialog", id="lab-dialog")))
-        layout = root.find("div", cls="item-layout")
-        self.assertIn("split-list", self.controllers(layout))
-        self.assertEqual(layout.get("data-split-list-mode-value"), "htmx")
+        layout = must_outer_split(root)
+        self.assertEqual(self.controllers(layout),
+                         {"split", "master-detail"})
         for pop_id in ("stock-menu", "more-filters"):
             with self.subTest(popover=pop_id):
                 self.assertIn("popover-anchor",
@@ -1996,11 +2467,10 @@ class TemplateWiringTests(PlanningCase):
     def test_planning_page_wiring(self) -> None:
         self.planned_item("NV-10", quantity=10)
         root = self.check_page(PLAN)
-        layout = root.find("div", cls="item-layout")
-        self.assertIsNotNone(layout)
-        self.assertIn("split-list", self.controllers(layout))
-        self.assertEqual(layout.get("data-split-list-mode-value"), "htmx")
-        self.assertEqual(layout.get("data-cookie"), "planning-list-view")
+        layout = must_outer_split(root)
+        self.assertEqual(self.controllers(layout),
+                         {"split", "master-detail"})
+        self.assertIn("planning-list-view", layout.attrs.values())
         grid = root.find("table", cls="main-table")
         self.assertIsNotNone(grid)
         self.assertNotIn("sortable-table", self.controllers(grid))
@@ -2013,7 +2483,7 @@ class TemplateWiringTests(PlanningCase):
         self.assertEqual(root.find_all("tr", attrs={"data-article": True}),
                          [])
 
-    def test_every_main_list_wires_the_split_list(self) -> None:
+    def test_every_main_list_wires_master_detail_and_split(self) -> None:
         self.planned_item("NV-10", quantity=10)
         make_task(self.kl, "NV-10")
         make_vessel(self.kl, article="NV-10", unit="mg", amount="5")
@@ -2027,13 +2497,24 @@ class TemplateWiringTests(PlanningCase):
                      "/lab/tasks/", "/lab/registry/", PLAN):
             with self.subTest(path=path):
                 root = self.check_page(path)
-                layout = root.find("div", cls="item-layout")
-                self.assertIsNotNone(layout)
-                self.assertIn("split-list", self.controllers(layout))
+                layout = must_outer_split(root)
+                self.assertEqual(self.controllers(layout),
+                                 {"split", "master-detail"})
                 self.assertEqual(
-                    layout.get("data-split-list-mode-value"), "htmx")
-                self.assertTrue(layout.get("data-cookie"))
+                    {name: value for name, value in layout.attrs.items()
+                     if name.startswith("data-master-detail-")},
+                    {"data-master-detail-level-value": "outer",
+                     "data-master-detail-rows-value": "item-rows",
+                     "data-master-detail-pane-value": "item-detail",
+                     "data-master-detail-param-value": "selected"})
+                self.assertRegex(layout.get("data-split-cookie-value"),
+                                 r"^[a-z]+-list-split$")
+                self.assertTrue([value for value in layout.attrs.values()
+                                 if value.endswith("-list-view")])
                 self.assertIsNotNone(root.find("table", cls="main-table"))
+                self.assertEqual(
+                    [node.tag for node in root.walk()
+                     if "split-list" in self.controllers(node)], [])
 
     def test_batch_narrow_wiring_on_item_and_delivery_forms(self) -> None:
         make_substance("cinnamic-acid", "Cinnamic acid")

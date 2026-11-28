@@ -988,10 +988,22 @@ class ScriptSourceTests(TestCase):
     def test_it_has_no_local_mode(self) -> None:
         self.assertNotRegex(self.text, r"[\"']local[\"']")
 
-    def test_it_names_the_main_table(self) -> None:
-        self.assertIn(".main-table tbody tr[data-item]", self.text)
-        self.assertIn(".main-table thead a", self.text)
-        self.assertIn('closest(".main-table")', self.text)
+    def test_it_names_the_rows_by_the_body_of_each_level(self) -> None:
+        """Each level binds the rows of its own body, which its values
+        name; no selector names the rows of every main table at once."""
+        self.assertTrue("tr[data-item]" in self.text, "no row selector")
+        self.assertFalse(".main-table tbody tr[data-item]" in self.text,
+                         "a selector names the rows of every main table")
+        self.assertTrue(".main-table thead a" in self.text)
+
+    def test_it_names_no_old_layout(self) -> None:
+        for name in ("item-layout", "split-list", "SplitListController",
+                     "splitList"):
+            with self.subTest(name=name):
+                self.assertFalse(name in self.text, name)
+
+    def test_it_keeps_the_scroll_of_each_widget_body(self) -> None:
+        self.assertTrue("widget__body" in self.text, "no widget body")
 
     def test_a_click_on_any_control_of_a_row_selects_nothing(self) -> None:
         self.assertIn("a, button, label, input, select, textarea",
@@ -1006,10 +1018,12 @@ class ScriptSourceTests(TestCase):
 
     def test_it_registers_the_controllers_that_stay(self) -> None:
         for name in ("popover-anchor", "batch-narrow", "sortable-table",
-                     "split-list", "dialog"):
+                     "master-detail", "split", "dialog"):
             with self.subTest(name=name):
                 self.assertRegex(
                     self.text, rf"register\(\s*[\"']{name}[\"']")
+        self.assertFalse("split-list" in self.text,
+                         "lab.js still names split-list")
 
     def test_it_holds_no_storage_helper(self) -> None:
         self.assertNotRegex(self.text, r"\bstorage\b")

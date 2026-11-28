@@ -20,13 +20,14 @@ from inventory.forms import BatchEditForm, BatchForm
 from inventory.history import history_entries
 from inventory.models import (Batch, DeliveryLine, Item, Movement, Source,
                               VesselMovement)
-from inventory.views.common import (BATCH_COOKIE, BATCHES, batch_source_text,
-                                    batch_url, form_page,
-                                    htmx_detail_or_redirect, list_view,
-                                    locations, pick_selected, saved, tabs)
+from inventory.views.common import (BATCH_COOKIE, BATCH_SPLIT_COOKIE, BATCHES,
+                                    batch_source_text, batch_url, form_page,
+                                    locations, saved, tabs)
 from journal.entries import entry_for
 from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
-                                htmx_list_push_url, pairs_sort_key, sort_value)
+                                htmx_detail_or_redirect, htmx_list_push_url,
+                                list_view, pairs_sort_key, pick_selected,
+                                sort_value, split_major)
 from tasks.models import Task, TaskStep
 
 
@@ -128,6 +129,7 @@ def batch_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(BATCHES, filter_pairs, selected,
                                  BATCH_CLASSES),
         "view": list_view(request, BATCH_COOKIE),
+        "major": split_major(request, BATCH_SPLIT_COOKIE, "first"),
         "q": q,
         "tabs": tabs(BATCHES),
     })

@@ -31,13 +31,14 @@ from inventory.models import (FACTOR, LEVEL_ORDER, Item, Level, Movement,
                               Vessel, plain)
 from inventory.statistics import Statistics, statistics
 from inventory.summaries import natural
-from inventory.views.common import (LIST, VIEW_COOKIE, categories,
-                                    consumption_url, form_page,
-                                    htmx_detail_or_redirect, in_use, item_form,
-                                    item_url, layers, list_view, open_vessels,
-                                    pick_selected, render_form, saved, tabs)
+from inventory.views.common import (ITEM_SPLIT_COOKIE, LIST, VIEW_COOKIE,
+                                    categories, consumption_url, form_page,
+                                    in_use, item_form, item_url, layers,
+                                    open_vessels, render_form, saved, tabs)
 from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
-                                htmx_list_push_url, pairs_sort_key, sort_value)
+                                htmx_detail_or_redirect, htmx_list_push_url,
+                                list_view, pairs_sort_key, pick_selected,
+                                sort_value, split_major)
 from planning import plan
 
 
@@ -414,6 +415,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "chosen": chosen,
         "selected": selected,
         "view": list_view(request, VIEW_COOKIE),
+        "major": split_major(request, ITEM_SPLIT_COOKIE, "first"),
         "total": len(rows),
         "filters": filters,
         "columns": columns(filters, today.year, selected),
@@ -443,10 +445,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
 @vary_on_headers("HX-Request", "HX-Current-URL")
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
-    the item PK alone, as the item list shows them beside its table,
-    and any other request with a redirect to the list with ``selected``
-    naming the item. Answer 404 for an unknown ID. The answer varies
-    with the ``HX-Request`` header."""
+    the item PK alone, and any other request with a redirect to the list
+    with ``selected`` naming the item. Answer 404 for an unknown ID."""
     item = get_object_or_404(Item.objects.with_substance(), pk=pk)
 
     def detail_context() -> dict[str, Any]:

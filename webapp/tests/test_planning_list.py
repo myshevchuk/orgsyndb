@@ -12,7 +12,8 @@ from . import Element, field_value, make_task, page, task_form_data
 from .collection_support import accept
 from .inventory_support import (VESSELS, TODAY, has_number,
                                 item_url, num)
-from .main_lists_support import (head_of, hidden_fields, query_of, rows_of,
+from .main_lists_support import (head_of, hidden_fields, outer_split,
+                                 query_of, rows_of,
                                  strong_columns)
 from .planning_support import (COLUMNS_DE, COLUMNS_EN, HTMX, PARAMETERS_TITLES,
                                PLAN, SHOW_DE, SHOW_EN, SHOW_VALUES, WINDOW,
@@ -102,7 +103,7 @@ class MainTableTests(ListCase):
         root = self.get(PLAN)
         found = list_table(root)
         self.assertEqual(len(root.find_all("table", cls="main-table")), 1)
-        layout = root.find("div", cls="item-layout")
+        layout = outer_split(root)
         self.assertIsNotNone(layout)
         self.assertIn(found, list(layout.walk()))
         self.assertIn(pane_of(root), list(layout.walk()))
@@ -196,7 +197,7 @@ class MainTableTests(ListCase):
                          list(pane_of(root).walk()))
 
     def test_the_planning_list_opens_in_the_details_view(self) -> None:
-        layout = self.get(PLAN).find("div", cls="item-layout")
+        layout = outer_split(self.get(PLAN))
         self.assertIsNotNone(layout)
         self.assertEqual(layout.get("data-view"), "details")
 

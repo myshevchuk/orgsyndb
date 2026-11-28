@@ -1,0 +1,9 @@
+{% load i18n %}<c-vars title="" href="" title_id="item-detail-title" actions_id="item-actions" page_label="" /><header class="pane-head">
+<div class="pane-head__main">
+<h2 id="{{ title_id }}"><a href="{{ href }}">{{ title }}</a>{{ title_extra }}</h2>
+{% if meta %}<p class="pane-head__meta">{{ meta }}</p>{% endif %}
+</div>
+{% if primary or menu or page_label %}<div class="pane-head__actions">
+{{ primary }}{% if menu %}<button type="button" class="pane-head__menu-btn lab-menu-button" popovertarget="{{ actions_id }}">{% translate "Actions" %}</button><div id="{{ actions_id }}" class="lab-popup pane-actions" popover data-controller="popover-anchor">{{ menu }}</div>{% endif %}{% if page_label %}<a class="pane-head__open" href="{{ href }}">{{ page_label }} →</a>{% endif %}
+</div>{% endif %}
+</header>

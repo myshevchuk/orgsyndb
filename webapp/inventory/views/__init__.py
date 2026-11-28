@@ -4,8 +4,10 @@ from inventory.views.batches import (batch_detail, batch_edit, batch_list,
                                      batch_new, batch_page)
 from inventory.views.bulk import bulk_detail, bulk_list
 from inventory.views.categories import (chemical_detail, chemical_list,
+                                        chemical_lot_detail,
                                         intermediate_detail,
-                                        intermediate_list)
+                                        intermediate_list,
+                                        intermediate_lot_detail)
 from inventory.views.common import LIST
 from inventory.views.items import (item_consumption, item_correct,
                                    item_detail, item_edit, item_fill,
@@ -30,8 +32,10 @@ __all__ = [
     "bulk_list",
     "chemical_detail",
     "chemical_list",
+    "chemical_lot_detail",
     "intermediate_detail",
     "intermediate_list",
+    "intermediate_lot_detail",
     "item_consumption",
     "item_correct",
     "item_detail",

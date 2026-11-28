@@ -12,11 +12,13 @@ from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
                                 htmx_detail_or_redirect, htmx_list_push_url,
-                                list_view, pick_selected, sort_value)
+                                list_view, pick_selected, sort_value,
+                                split_major)
 from planning.plan import Plan, Row
 
 PLAN = "/lab/planning/"
 PLANNING_COOKIE = "planning-list-view"
+PLANNING_SPLIT_COOKIE = "planning-list-split"
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 SHOW_CHOICES = (
     ("", gettext_lazy("All")),
@@ -106,6 +108,7 @@ def planning_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(PLAN, filter_pairs, selected,
                                  PLANNING_CLASSES),
         "view": list_view(request, PLANNING_COOKIE, default="details"),
+        "major": split_major(request, PLANNING_SPLIT_COOKIE, "first"),
         "parameters": plan.parameters,
     })
     pairs = [*filter_pairs, *order.pairs()]

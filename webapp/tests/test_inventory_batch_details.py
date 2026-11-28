@@ -8,13 +8,23 @@ from typing import Any
 from . import Element, make_batch, make_vessel, page
 from .inventory_support import BATCHES, InventoryCase, batch_url, vessel_url
 from .journal_support import entry_of, make_notebook
-from .main_lists_support import (HTMX, body_of, cells, headers_of, heading_of,
-                                 link_in, must_pane, key_number, replaced,
-                                 row_for, row_keys, texts_of_links,
-                                 unsorted_reasons)
+from .main_lists_support import (body_of, cells, has_ancestor_class,
+                                 headers_of, heading_of, HTMX, key_number,
+                                 link_in, must_pane, pane_head, pane_widgets,
+                                 record_tables, replaced, row_for, row_keys,
+                                 texts_of_links, unsorted_reasons)
 from .test_inventory_dialogs import current
 
 OPEN_PAGE = "Chargenseite öffnen"
+
+
+def vessels_table(found: Element) -> Element:
+    """The table of the open vessels in the pane FOUND, the one whose
+    first column is ``Gefäß``; fail when it has none."""
+    for grid in found.find_all("table"):
+        if headers_of(grid)[:1] == ["Gefäß"]:
+            return grid
+    raise AssertionError("the pane has no table of vessels")
 
 
 class BatchDetailsCase(InventoryCase):
@@ -68,7 +78,7 @@ class DetailsOfABatchTests(BatchDetailsCase):
         self.assertEqual(links[f"#{self.stored.pk}"],
                          vessel_url(self.stored))
         self.assertNotIn(f"#{self.flask.pk}", links)
-        rows = [cell.text() for row in body_of(found.find("table"))
+        rows = [cell.text() for row in body_of(vessels_table(found))
                 for cell in cells(row)]
         self.assertIn("Kühlschrank 2", rows)
         self.assertIn("2 g", rows)
@@ -120,12 +130,30 @@ class DetailsOfABatchTests(BatchDetailsCase):
         self.assertIn(OPEN_PAGE, texts_of_links(found))
 
 
+class HeadAndWidgetsTests(BatchDetailsCase):
+
+    def test_the_head_titles_the_batch_and_the_data_is_in_widgets(
+            self) -> None:
+        batch = self.made()
+        found = self.details(batch)
+        head = pane_head(found)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"), batch_url(batch))
+        self.assertTrue(pane_widgets(found))
+        for each in pane_widgets(found):
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(found):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
+
+
 class VesselsOfABatchTests(BatchDetailsCase):
 
     def test_the_open_vessels_in_a_table(self) -> None:
         batch = self.made()
         found = self.details(batch)
-        grid = found.find("table")
+        grid = vessels_table(found)
         self.assertEqual(headers_of(grid), ["Gefäß", "Art", "Ort", "Menge"])
         rows = body_of(grid)
         self.assertEqual(len(rows), 1)
@@ -138,7 +166,7 @@ class VesselsOfABatchTests(BatchDetailsCase):
         first = make_vessel(self.kl, batch, unit="mg", amount="5")
         make_vessel(self.kl, batch, unit="mg", amount="0")
         second = make_vessel(self.kl, batch, unit="g", amount="3")
-        rows = body_of(self.details(batch).find("table"))
+        rows = body_of(vessels_table(self.details(batch)))
         self.assertEqual([cells(row)[0].text() for row in rows],
                          [f"#{first.pk}", f"#{second.pk}"])
 
@@ -149,7 +177,9 @@ class VesselsOfABatchTests(BatchDetailsCase):
                 for _ in range(vessels):
                     make_vessel(self.kl, batch, unit="mg", amount="0")
                 found = self.details(batch)
-                self.assertEqual(found.find_all("table"), [])
+                self.assertEqual(
+                    [grid for grid in found.find_all("table")
+                     if "kv-table" not in grid.classes], [])
                 self.assertIn("Keine", found.text())
 
     def test_the_vessel_table_sorts_in_the_browser(self) -> None:
@@ -157,7 +187,7 @@ class VesselsOfABatchTests(BatchDetailsCase):
         make_vessel(self.kl, batch, unit="mg", amount="500")
         found = self.details(batch)
         self.assertEqual(unsorted_reasons(found), [])
-        rows = body_of(found.find("table"))
+        rows = body_of(vessels_table(found))
         keys = {cells(row)[3].text(): cells(row)[3].get("data-sort")
                 for row in rows}
         self.assertEqual({name: key_number(key) for name, key in keys.items()},

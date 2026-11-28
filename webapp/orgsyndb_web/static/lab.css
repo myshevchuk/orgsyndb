@@ -786,97 +786,6 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
   color: var(--draft-fg);
   border: 1px solid color-mix(in srgb, var(--draft-fg) 30%, transparent);
 }
-.item-detail--split {
-  padding: 0;
-  overflow: hidden;
-}
-.split-detail-head {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem 0.75rem;
-  padding: 0.42rem 0.65rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-}
-.split-detail-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.3rem 0.55rem;
-  min-width: 0;
-}
-.split-detail-title h2 { margin: 0; font-size: 0.9375rem; }
-.split-detail-title h2 a { text-decoration: none; }
-.split-detail-title h2 a:hover { text-decoration: underline; }
-.split-detail-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: none;
-}
-.split-detail-btn {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.16rem 0.55rem;
-  font-size: 0.78125rem;
-  font-weight: 500;
-  line-height: 1.3;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.22rem;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.split-detail-btn:hover { border-color: var(--muted); text-decoration: none; }
-.split-detail-scroll {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: auto;
-}
-.split-vessel-table,
-.split-movements-table {
-  width: 100%;
-  font-size: 0.8125rem;
-}
-.split-movements-table td { white-space: nowrap; }
-.split-vessel-table td { white-space: normal; }
-.split-vessel-table td.number,
-.split-vessel-table td:nth-child(4) { white-space: nowrap; }
-.split-vessel-table td.split-vessel-note,
-.split-movements-table td:last-child {
-  white-space: normal;
-  min-width: 6rem;
-}
-.split-vessel-actions {
-  text-align: right;
-  white-space: nowrap;
-  font-size: 0.78125rem;
-}
-.split-movements-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.45rem 0.65rem 0.3rem;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 0.75rem;
-}
-.split-movements-head h3 {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font-size: 0.71875rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.split-empty { margin: 0; padding: 0.75rem; }
 [popovertarget]:has(+ :popover-open) { outline: 2px solid var(--link); outline-offset: 2px; }
 .lab-table-note { margin: var(--space-2) 0 0; color: var(--muted); font-family: var(--font-ui); font-size: 0.8125rem; }
 .lab-table-note strong { color: var(--fg); font-weight: 600; }
@@ -935,9 +844,23 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
   #stock-menu { position-anchor: --stock-menu-anchor; }
   [popovertarget="more-filters"] { anchor-name: --more-filters-anchor; }
   #more-filters { position-anchor: --more-filters-anchor; }
+  [popovertarget="item-actions"] { anchor-name: --item-actions-anchor; }
+  #item-actions { position-anchor: --item-actions-anchor; }
+  [popovertarget="lot-actions"] { anchor-name: --lot-actions-anchor; }
+  #lot-actions { position-anchor: --lot-actions-anchor; }
 }
 .lab-menu { padding: var(--space-2) var(--space-3); }
 .lab-menu > label { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-2); }
+.pane-actions { min-width: 11rem; padding: var(--space-1); }
+.pane-actions a {
+  display: block;
+  padding: 0.3rem 0.6rem;
+  color: var(--fg);
+  text-decoration: none;
+  border-radius: 0.2rem;
+  white-space: nowrap;
+}
+.pane-actions a:is(:hover, :focus-visible) { background: var(--surface); }
 
 .stock-menu { width: min(23rem, calc(100vw - 2rem)); padding: var(--space-1); }
 .stock-menu ul { list-style: none; margin: 0; padding: 0; }
@@ -962,41 +885,114 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 .swatch-all { border-color: transparent; text-align: center; line-height: 0.9rem; }
 .stock-menu a[aria-current] .swatch-all::before { content: "✓"; content: "✓" / ""; }
 
-/* The details of one item, beside the table while the details view
-   shows and nowhere else. */
-#item-detail { display: none; }
+/* Details panes: hidden outside the details view and off paper. */
+.pane-toggle { display: none; }
 .item-detail {
-  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.55rem 0.65rem;
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 0.25rem;
   font-family: var(--font-ui);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  min-width: 0;
+  min-height: 0;
 }
-.detail-head { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); margin-bottom: var(--space-3); }
-.item-detail h2 { margin: 0; font-size: 1rem; }
-.detail-head p { margin: var(--space-1) 0 0; color: var(--muted); font-size: 0.8125rem; }
-.item-detail h3 { margin: var(--space-3) 0 var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--border); font-size: 0.875rem; }
-.item-detail h4 { margin: var(--space-3) 0 var(--space-2); font-size: 0.8125rem; color: var(--muted); }
-.detail-links, .item-detail .lab-actions { margin: var(--space-2) 0 0; }
-.detail-links a { font-weight: 600; }
-.detail-location { display: grid; grid-template-columns: 6rem 1fr; gap: var(--space-1) var(--space-2); margin: 0; }
-.detail-location dt { color: var(--muted); }
-.detail-location dd { margin: 0; }
+#item-detail { display: none; }
+.pane-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+.pane-head__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.55rem;
+  min-width: 0;
+}
+.pane-head h2 { margin: 0; font-size: 0.95rem; line-height: 1.25; }
+.pane-head h2 a { text-decoration: none; }
+.pane-head h2 a:hover { text-decoration: underline; }
+.pane-head__meta { margin: 0; color: var(--muted); font-size: 0.78125rem; }
+.pane-head__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+.pane-head__btn,
+.pane-head__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.55rem;
+  font-family: var(--font-ui);
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.22rem;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pane-head__btn:hover,
+.pane-head__menu-btn:hover { border-color: var(--muted); text-decoration: none; }
+.pane-head__open {
+  font-size: 0.78125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.pane-head__open:hover { text-decoration: underline; }
+.widget__head h3 {
+  margin: 0;
+  font-size: 0.71875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+details.widget > summary.widget__head h3::before {
+  content: "▸";
+  content: "▸" / "";
+  font-size: 0.6875rem;
+  color: var(--muted);
+  width: 0.7rem;
+  display: inline-block;
+}
+details.widget[open] > summary.widget__head h3::before {
+  content: "▾";
+  content: "▾" / "";
+}
+.pane-list { list-style: none; margin: 0; padding: 0; }
+.pane-list li {
+  padding: 0.35rem 0.6rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.pane-list li:first-child { border-top: 0; }
+.pane-list strong { display: block; }
 .detail-note {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-left: 3px solid var(--border);
   background: var(--surface);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
-.detail-lots { list-style: none; margin: 0; padding: 0; }
-.detail-lots li + li { margin-top: var(--space-2); }
-.detail-lots strong { display: block; }
-.detail-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: var(--space-3); margin: 0; }
-.detail-figures dt { color: var(--muted); font-size: 0.8125rem; }
-.detail-figures dd { margin: 0.2rem 0 0; font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .quarter-bars {
   list-style: none;
   display: flex;
@@ -1012,12 +1008,12 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 .quarter-bar.current .bar { background: var(--link); }
 .quarter-bar .bar-value { flex-shrink: 0; text-align: center; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .quarter-bar .bar-label { position: absolute; top: 100%; left: 0; right: 0; padding-top: 0.3rem; color: var(--muted); font-size: 0.6875rem; text-align: center; white-space: nowrap; }
-/* While a choice loads, the old item's details stay in view but take no
-   click. */
-#item-detail.htmx-request { opacity: 0.5; pointer-events: none; }
+/* While a choice loads, the old details stay in view but take no click. */
+#item-detail.htmx-request,
+#lot-detail.htmx-request { opacity: 0.5; pointer-events: none; }
 
-/* Paper has no use for the item list's controls or popups; the details
-   stay hidden, as `#item-detail` above leaves them. Collapsible widgets
+/* Paper has no use for the list's controls or popups; the details stay
+   hidden, as `#item-detail` above leaves them. Collapsible widgets
    print open, and sort header buttons print so column headers stay. */
 @media print {
   .lab-toolbar, .lab-table-note, .lab-heading .actions,
@@ -1036,14 +1032,11 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
   .main-table td:not(.num):not(.number) { white-space: normal; }
 }
 
-/* On screen, the item list's box scrolls both ways, at most the window's
-   height, and keeps the header rows at its top and the first column at
-   its left. The row of the selected item is marked and a click chooses
-   a row, in both views. The details view shows the selected item's
-   details beside the table, below it in a narrow window. lab.js marks
-   the layout data-scripted and keeps its data-view; until then, and
-   without the script, the layout follows the radio buttons of the
-   switch. Paper keeps print.css's whole table without the details. */
+/* On screen, splits arrange two panes in the golden ratio, stacked
+   (rows) or side by side (columns), and nest freely. The outer split
+   zooms to its first pane in the table view, following lab.js's
+   data-view or the radio switch without script. Paper keeps the whole
+   table without details. */
 @media screen {
   .table-scroll.table-sticky { overflow: auto; max-height: calc(100vh - 4rem); }
   .table-sticky thead { position: sticky; top: 0; z-index: 2; }
@@ -1068,33 +1061,149 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
     outline-offset: -2px;
   }
 
-  .item-layout[data-scripted][data-view="details"],
-  main:has(#view-details:checked) .item-layout:not([data-scripted]) {
+  .split {
     display: grid;
-    grid-template-columns: fit-content(calc(100% - 20rem - var(--space-4))) minmax(20rem, 1fr);
-    gap: var(--space-4);
-    align-items: start;
+    gap: 0.65rem;
+    min-width: 0;
+    min-height: 0;
   }
-  .item-layout[data-scripted][data-view="details"] #item-detail,
-  main:has(#view-details:checked) .item-layout:not([data-scripted]) #item-detail {
-    display: block;
-    position: sticky;
-    top: var(--space-3);
-    max-height: calc(100vh - 2rem);
-    overflow: auto;
+  .split__pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
   }
-  @media (max-width: 55rem) {
-    .item-layout[data-scripted][data-view="details"],
-    main:has(#view-details:checked) .item-layout:not([data-scripted]) { grid-template-columns: minmax(0, 1fr); }
-    .item-layout[data-scripted][data-view="details"] #item-detail,
-    main:has(#view-details:checked) .item-layout:not([data-scripted]) #item-detail { position: static; max-height: none; }
+  .split__pane > .table-scroll,
+  .split__pane > .item-detail,
+  .split__pane > .split {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .item-detail > .split {
+    flex: 1 1 0;
+    min-height: 0;
   }
 
-  /* Opt-in fixed-viewport frame for the four Bestand lists on screens
-     at least 900 px wide: no page scroll, tables and the item details
-     pane scroll in their own boxes under sticky headers. Off below
-     900 px and in print. */
-  @media (min-width: 900px) {
+  .split.split--rows[data-major="first"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1.618fr) minmax(0, 1fr);
+  }
+  .split.split--rows[data-major="second"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1.618fr);
+  }
+  .split.split--columns[data-major="first"] {
+    grid-template-columns: minmax(0, 1.618fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .split.split--columns[data-major="second"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.618fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .split.split--outer[data-scripted][data-view="table"],
+  main:not(:has(#view-details:checked)) .split.split--outer:not([data-scripted]) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .split.split--outer[data-scripted][data-view="table"] > .split__pane:last-child,
+  main:not(:has(#view-details:checked)) .split.split--outer:not([data-scripted]) > .split__pane:last-child {
+    display: none;
+  }
+  .split.split--outer[data-scripted][data-view="details"] #item-detail,
+  main:has(#view-details:checked) .split.split--outer:not([data-scripted]) #item-detail {
+    display: flex;
+  }
+
+  main:has(.split--outer[data-scripted][data-view="details"]) .pane-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+    background: var(--surface);
+    font-size: 0.78125rem;
+    white-space: nowrap;
+  }
+  .pane-toggle__label,
+  .pane-toggle__sep,
+  .pane-toggle__choice { color: var(--muted); }
+  main:has(.split--outer[data-major="first"]) .pane-toggle__first,
+  main:has(.split--outer[data-major="second"]) .pane-toggle__second {
+    color: var(--fg);
+    font-weight: 600;
+  }
+
+  .widget-grid {
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    gap: 0.55rem;
+    align-items: stretch;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+  .widget-grid--1 { grid-template-columns: minmax(0, 1fr); }
+  .widget-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .widget-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .widget-grid > .widget,
+  .widget-grid__col > .widget {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
+  .widget-grid__col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-height: 0;
+    min-width: 0;
+  }
+  .widget-grid__col > .widget { flex: 1 1 0; }
+  .widget-grid .widget__head { flex: none; }
+  .widget-grid .widget__body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+  }
+  /* One column: the widgets above the last keep their content's height,
+     the last takes the rest. */
+  .widget-grid--1 {
+    display: flex;
+    flex-direction: column;
+  }
+  .widget-grid--1 > .widget { flex: 0 1 auto; max-height: 50%; }
+  .widget-grid--1 > .widget:not(:last-child) > .widget__body { flex: 0 1 auto; }
+  .widget-grid--1 > .widget:last-child { flex: 1 1 0; max-height: none; }
+  .widget-grid .aux-table:not(.kv-table) th,
+  .widget-grid .aux-table:not(.kv-table) td { white-space: nowrap; }
+  /* Marks such as "nachgetragen" wrap below the delivery number. */
+  .note-table td:first-child { white-space: normal; }
+
+  @media (width < 56.25rem) {
+    .split.split--columns[data-major="first"],
+    .split.split--columns[data-major="second"],
+    .split.split--rows[data-major="first"],
+    .split.split--rows[data-major="second"] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto;
+    }
+    .split--outer[data-scripted][data-view="details"] .split__pane > .table-scroll,
+    main:has(#view-details:checked) .split--outer:not([data-scripted]) .split__pane > .table-scroll {
+      max-height: 34vh;
+    }
+    .widget-grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-auto-rows: auto;
+    }
+    .widget-grid .widget__body { overflow: visible; }
+  }
+
+  /* Opt-in fixed-viewport frame for the main lists on screens at least
+     56.25rem (900 px) wide: no page scroll, tables and each widget body
+     scroll in their own boxes under sticky headers. Off below 900 px
+     and in print. */
+  @media (min-width: 56.25rem) {
     html:has(body.lab-frame) {
       height: 100vh;
       overflow: hidden;
@@ -1139,11 +1248,9 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
     body.lab-frame .lab-toolbar .lab-filters { flex-wrap: nowrap; min-width: 0; }
     body.lab-frame .lab-toolbar input[type="search"] { flex: 0 1 10.25rem; }
     body.lab-frame form.lab-toolbar input[type="search"] { flex: 0 1 17rem; }
-    body.lab-frame .item-layout {
+    body.lab-frame .split--outer {
       flex: 1 1 0;
       min-height: 0;
-      display: flex;
-      flex-direction: column;
       overflow: hidden;
     }
     /* Positioned, so that absolutely positioned descendants such as
@@ -1172,62 +1279,18 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
       border-bottom: 1px solid var(--border);
     }
     body.lab-frame .table-sticky thead :is(th, td):first-child { z-index: 3; }
-    body.lab-frame .item-layout[data-scripted][data-view="details"],
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) {
-      display: grid;
-      grid-template-columns: fit-content(calc(100% - 21rem - 0.75rem)) minmax(21rem, 1fr);
-      grid-template-rows: minmax(0, 1fr);
-      gap: 0.75rem;
-      align-items: stretch;
-      overflow: hidden;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .table-scroll,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .table-scroll {
+    body.lab-frame .split__pane > .item-detail {
       height: 100%;
-      min-height: 0;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] #item-detail,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) #item-detail {
-      position: static;
-      height: 100%;
-      min-height: 0;
-      max-height: none;
-      overflow: auto;
-    }
-    body.lab-frame .item-layout.item-layout--split[data-scripted][data-view="details"],
-    body.lab-frame main:has(#view-details:checked) .item-layout.item-layout--split:not([data-scripted]) {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(0, 45fr) minmax(0, 55fr);
-    }
-    body.lab-frame .item-layout.item-layout--split[data-scripted][data-view="details"] #item-detail,
-    body.lab-frame main:has(#view-details:checked) .item-layout.item-layout--split:not([data-scripted]) #item-detail {
-      display: flex;
-      flex-direction: column;
       overflow: hidden;
-    }
-    body.lab-frame .split-detail-scroll {
-      border: 0;
-      border-radius: 0;
-    }
-    @media (min-width: 1200px) {
-      body.lab-frame .item-layout:not(.item-layout--split)[data-scripted][data-view="details"],
-      body.lab-frame main:has(#view-details:checked) .item-layout:not(.item-layout--split):not([data-scripted]) {
-        grid-template-columns: fit-content(calc(100% - 25rem - 0.75rem)) minmax(25rem, 1fr);
-      }
     }
   }
 
   /* The switch between the views is animated where the browser has view
-     transitions and the user has not asked for less motion. The table
-     box's snapshots are drawn at their own size from the left edge, in a
-     group that clips, so that the base columns stand still while the
-     box's width changes and the table view's columns fade; the pane
-     slides in from the right and out to it. */
+     transitions and the user has not asked for less motion. */
   @media (prefers-reduced-motion: no-preference) {
     :root { --view-duration: 0.25s; }
-    .item-layout > .table-scroll.table-sticky { view-transition-name: main-table; }
-    #item-detail { view-transition-name: item-pane; }
-    #item-detail.item-detail--split { view-transition-name: split-pane; }
+    .split--outer > .split__pane > .table-scroll.table-sticky { view-transition-name: main-table; }
+    .split--outer > .split__pane > #item-detail { view-transition-name: item-pane; }
     ::view-transition-group(main-table) { overflow: clip; animation-duration: var(--view-duration); }
     ::view-transition-old(main-table),
     ::view-transition-new(main-table) {
@@ -1239,13 +1302,8 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
     ::view-transition-group(item-pane) { animation-duration: var(--view-duration); }
     ::view-transition-old(item-pane) { animation: item-pane-out var(--view-duration) ease both; }
     ::view-transition-new(item-pane) { animation: item-pane-in var(--view-duration) ease both; }
-    @keyframes item-pane-in { from { opacity: 0; transform: translateX(100%); } }
-    @keyframes item-pane-out { to { opacity: 0; transform: translateX(100%); } }
-    ::view-transition-group(split-pane) { animation-duration: var(--view-duration); }
-    ::view-transition-old(split-pane) { animation: split-pane-out var(--view-duration) ease both; }
-    ::view-transition-new(split-pane) { animation: split-pane-in var(--view-duration) ease both; }
-    @keyframes split-pane-in { from { opacity: 0; transform: translateY(100%); } }
-    @keyframes split-pane-out { to { opacity: 0; transform: translateY(100%); } }
+    @keyframes item-pane-in { from { opacity: 0; transform: translateY(100%); } }
+    @keyframes item-pane-out { to { opacity: 0; transform: translateY(100%); } }
   }
 }
 

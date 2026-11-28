@@ -14,13 +14,14 @@ from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 from inventory.figures import containers_from, molar_mass
 from inventory.models import Item, Source, Vessel
 from inventory.summaries import natural
-from inventory.views.common import (BULK, BULK_COOKIE, LIST,
-                                    batch_source_text, bulk_vessels,
-                                    htmx_detail_or_redirect, layers,
-                                    list_view, pick_selected, tabs)
+from inventory.views.common import (BULK, BULK_COOKIE, BULK_SPLIT_COOKIE,
+                                    LIST, batch_source_text, bulk_vessels,
+                                    layers, tabs)
 from inventory.views.vessels import vessel_ledger
 from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
-                                clean_choice, htmx_list_push_url, sort_value)
+                                clean_choice, htmx_detail_or_redirect,
+                                htmx_list_push_url, list_view, pick_selected,
+                                sort_value, split_major)
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,7 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
         "order": order,
         "headers": order.headers(BULK, filter_pairs, selected, BULK_CLASSES),
         "view": list_view(request, BULK_COOKIE),
+        "major": split_major(request, BULK_SPLIT_COOKIE, "first"),
         "q": q,
         "location": location,
         "source": source,
@@ -173,10 +175,9 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
 @vary_on_headers("HX-Request", "HX-Current-URL")
 def bulk_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
-    the vessel PK alone, as the bulk list shows them beside its table,
-    and any other request with a redirect to the list with ``selected``
-    naming the vessel. Answer 404 for a vessel the bulk list does not
-    hold."""
+    the vessel PK alone, and any other request with a redirect to the
+    list with ``selected`` naming the vessel. Answer 404 for a vessel
+    the bulk list does not hold."""
     vessel = get_object_or_404(bulk_vessels(), pk=pk)
     return htmx_detail_or_redirect(
         request, BULK, vessel.pk, "inventory/bulk_list.html#detail",

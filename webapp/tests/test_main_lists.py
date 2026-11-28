@@ -11,7 +11,7 @@ from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from django.contrib.auth import get_user_model
 
@@ -19,10 +19,15 @@ from . import (Element, make_batch, make_task, make_vessel, page, past,
                substance_for)
 from .demo_support import SeededCase
 from .inventory_support import InventoryCase
-from .main_lists_support import (HTMX, MAIN_LISTS, MainList, aria_sorts,
-                                 body_rows, cells, head_cells, hidden_fields,
-                                 main_table, main_tables, marked, must_pane,
-                                 lists_records, path_of, query_of, row_keys,
+from .main_lists_support import (HTMX, LOT_TABLE, MAIN_LISTS, MainList,
+                                 aria_sorts, body_rows, cells,
+                                 has_ancestor_class, head_cells,
+                                 hidden_fields, in_detail_pane, lists_records,
+                                 lot_keys, lot_marked, lot_tables,
+                                 main_table, main_tables, marked,
+                                 must_outer_split, must_pane,
+                                 pane_head, pane_widgets, path_of, query_of,
+                                 replaced, row_keys, split_panes,
                                  unsorted_reasons)
 
 
@@ -40,6 +45,10 @@ def per_list(test: Callable[..., None]) -> Callable[[Any], None]:
     run.__name__ = test.__name__
     run.__doc__ = test.__doc__
     return run
+
+
+# The lists whose details hold a lot table and whose address names a lot.
+CATEGORY_LISTS = ("intermediate", "chemical")
 
 
 def link_of(cell: Element) -> Element:
@@ -79,13 +88,14 @@ class MainListCase(SeededCase):
 
 
 class MainTableTests(MainListCase):
-    """The main table, its header, its body and the pane beside it."""
+    """The main table, its header, its body and its details pane."""
 
     @per_list
     def test_each_list_shows_one_main_table(self, spec: MainList) -> None:
         root = self.fetch(spec.path)
         grid = main_table(root)
-        self.assertEqual(len(main_tables(root)), 1)
+        self.assertEqual(len([found for found in main_tables(root)
+                              if not in_detail_pane(found)]), 1)
         self.assertEqual(len(grid.find_all("table")), 0)
         head = root.find(id="item-head")
         body = root.find(id="item-rows")
@@ -132,19 +142,6 @@ class MainTableTests(MainListCase):
                 self.assertIn("data-refresh", found.attrs)
 
     @per_list
-    def test_the_table_sits_in_the_split_layout(self, spec: MainList) -> None:
-        root = self.fetch(spec.path)
-        layout = root.find("div", cls="item-layout")
-        self.assertIsNotNone(layout)
-        self.assertEqual(layout.get("data-controller"), "split-list")
-        self.assertEqual(layout.get("data-split-list-mode-value"),
-                         "htmx")
-        self.assertEqual(layout.get("data-cookie"), spec.cookie)
-        inside = list(layout.walk())
-        self.assertIn(main_table(root), inside)
-        self.assertIn(must_pane(root), inside)
-
-    @per_list
     def test_the_page_is_framed_and_varies_on_the_cookie(
             self, spec: MainList) -> None:
         response = self.client.get(spec.path)
@@ -153,6 +150,245 @@ class MainTableTests(MainListCase):
         self.assertIn("cookie", {
             name.strip().lower()
             for name in response.get("Vary", "").split(",")})
+
+
+# ---------------------------------------------------------------------------
+# The split
+
+
+SPLIT_COOKIES = {
+    "item": "item-list-split", "bulk": "bulk-list-split",
+    "delivery": "delivery-list-split",
+    "intermediate": "intermediate-list-split",
+    "chemical": "chemical-list-split", "batch": "batch-list-split",
+    "vessel": "vessel-list-split", "planning": "planning-list-split",
+    "task": "task-list-split", "substance": "substance-list-split",
+}
+# The values of the controller `master-detail` on the outer split.
+OUTER_VALUES = {
+    "data-master-detail-level-value": "outer",
+    "data-master-detail-rows-value": "item-rows",
+    "data-master-detail-pane-value": "item-detail",
+    "data-master-detail-param-value": "selected",
+}
+
+
+class SplitTests(MainListCase):
+    """Each main list is one outer split of its table and its details
+    pane, and a cookie remembers which side is larger."""
+
+    @per_list
+    def test_the_table_and_the_pane_are_the_two_panes_of_one_split(
+            self, spec: MainList) -> None:
+        root = self.fetch(spec.path)
+        outer = must_outer_split(root)
+        direction, major = spec.layout
+        other = "rows" if direction == "columns" else "columns"
+        self.assertIn("split", outer.classes)
+        self.assertIn(f"split--{direction}", outer.classes)
+        self.assertNotIn(f"split--{other}", outer.classes)
+        self.assertEqual(outer.get("data-major"), major)
+        self.assertEqual(set((outer.get("data-controller") or "").split()),
+                         {"split", "master-detail"})
+        self.assertEqual(outer.get("data-split-cookie-value"),
+                         SPLIT_COOKIES[spec.name])
+        for name, value in OUTER_VALUES.items():
+            self.assertEqual(outer.get(name), value, name)
+        first, second = split_panes(outer)
+        self.assertIn(main_table(root), list(first.walk()))
+        self.assertIn(must_pane(root), list(second.walk()))
+        self.assertEqual(len(split_panes(outer)), 2)
+
+    @per_list
+    def test_the_split_names_the_views_cookie_and_carries_the_view(
+            self, spec: MainList) -> None:
+        self.client.cookies[spec.cookie] = "details"
+        outer = must_outer_split(self.fetch(spec.path))
+        self.assertEqual(outer.get("data-view"), "details")
+        self.assertIn(spec.cookie, outer.attrs.values())
+
+    @per_list
+    def test_the_old_layout_is_gone(self, spec: MainList) -> None:
+        root = self.fetch(spec.path)
+        for name in ("item-layout", "item-layout--split"):
+            self.assertEqual(root.find_all(cls=name), [], name)
+        self.assertEqual(
+            [node.tag for node in root.walk()
+             if "split-list" in (node.get("data-controller") or "").split()
+             or any(name.startswith("data-split-list")
+                    for name in node.attrs)], [])
+        self.assertEqual(len(root.find_all("div", cls="split--outer")), 1)
+
+    @per_list
+    def test_the_page_has_the_toggle(self, spec: MainList) -> None:
+        for view in ("details", "table"):
+            with self.subTest(view=view):
+                self.client.cookies[spec.cookie] = view
+                root = self.fetch(spec.path)
+                found = [button for button in root.find_all("button")
+                         if "split#toggle" in (
+                             button.get("data-lab-action") or "")]
+                self.assertEqual(len(found), 1)
+                self.assertIsNotNone(found[0].closest("main"))
+                self.assertTrue(
+                    found[0].closest("form") is None
+                    or found[0].get("type") == "button")
+
+    @per_list
+    def test_the_cookie_gives_the_larger_side(self, spec: MainList) -> None:
+        direction, major = spec.layout
+        flipped = "second" if major == "first" else "first"
+        for cookie, wanted in ((None, major), (flipped, flipped),
+                               (major, major), ("bogus", major),
+                               ("", major), ("FIRST", major),
+                               ("table", major)):
+            with self.subTest(cookie=cookie):
+                name = SPLIT_COOKIES[spec.name]
+                self.client.cookies.pop(name, None)
+                if cookie is not None:
+                    self.client.cookies[name] = cookie
+                outer = must_outer_split(self.fetch(spec.path))
+                self.assertEqual(outer.get("data-major"), wanted)
+                self.assertIn(f"split--{direction}", outer.classes)
+
+    @per_list
+    def test_another_lists_cookie_changes_nothing(
+            self, spec: MainList) -> None:
+        _, major = spec.layout
+        flipped = "second" if major == "first" else "first"
+        self.client.cookies.clear()
+        for name, cookie in SPLIT_COOKIES.items():
+            if name != spec.name:
+                self.client.cookies[cookie] = flipped
+        self.client.cookies[spec.cookie] = "details"
+        outer = must_outer_split(self.fetch(spec.path))
+        self.assertEqual(outer.get("data-major"), major)
+
+    def test_the_planning_list_keeps_its_details_view_with_a_split(
+            self) -> None:
+        spec = MAIN_LISTS["planning"]
+        outer = must_outer_split(self.fetch(spec.path))
+        self.assertEqual(outer.get("data-view"), "details")
+
+    @per_list
+    def test_only_the_category_lists_name_a_lot(self, spec: MainList) -> None:
+        root = self.fetch(spec.path)
+        names = {name for name in hidden_fields(root)}
+        linked = {name for cell in head_cells(root)
+                  for link in cell.find_all("a")
+                  for name in query_of(link.get("href"))}
+        if spec.name in CATEGORY_LISTS:
+            self.assertIn("lot", names)
+            self.assertIn("lot", linked)
+        else:
+            self.assertNotIn("lot", names)
+            self.assertNotIn("lot", linked)
+
+    @per_list
+    def test_a_pane_holds_no_split_but_the_category_lists(
+            self, spec: MainList) -> None:
+        pane = must_pane(self.fetch(spec.path))
+        nested = pane.find_all("div", cls="split")
+        if spec.name in ("intermediate", "chemical"):
+            self.assertEqual(len(nested), 1)
+            self.assertNotIn("split--outer", nested[0].classes)
+        else:
+            self.assertEqual(nested, [])
+
+
+# ---------------------------------------------------------------------------
+# The panes
+
+
+PAGES_OF = {
+    "item": r"^/lab/inventory/items/{key}/$",
+    "bulk": r"^/lab/inventory/vessels/{key}/$",
+    "delivery": r"^/lab/inventory/deliveries/{key}/$",
+    "intermediate": r"^/lab/registry/substances/{key}/$",
+    "chemical": r"^/lab/registry/substances/{key}/$",
+    "batch": r"^/lab/inventory/batches/{key}/$",
+    "vessel": r"^/lab/inventory/vessels/{key}/$",
+    # The planning list is keyed by article number: its pane links to the
+    # page of the article's substance.
+    "planning": r"^/lab/registry/substances/[a-z0-9-]+/$",
+    "task": r"^/lab/tasks/{key}/$",
+    "substance": r"^/lab/registry/substances/{key}/$",
+}
+
+
+class PaneWidgetTests(MainListCase):
+    """Every details pane of a record is a head with the record's title
+    and its data in widgets (web-app: Main lists, Views)."""
+
+    def selected(self, spec: MainList, count: int = 3) -> list[Element]:
+        """The panes of the first COUNT records of the list, as the list's
+        page holds them."""
+        return [must_pane(self.fetch(
+            f"{spec.path}?selected={quote(key)}"))
+            for key in self.keys_of(spec)[:count]]
+
+    @per_list
+    def test_the_head_titles_the_record_and_links_to_its_page(
+            self, spec: MainList) -> None:
+        for pane in self.selected(spec):
+            key = pane.get("data-item")
+            with self.subTest(record=key):
+                head = pane_head(pane)
+                self.assertIsNotNone(head, "the pane has no head")
+                self.assertEqual(len(pane.find_all(
+                    id="item-detail-title")), 1)
+                title = head.find("h2", id="item-detail-title")
+                self.assertIsNotNone(title)
+                link = title.find("a")
+                self.assertIsNotNone(link, "the title links nowhere")
+                self.assertRegex(path_of(link.get("href")), PAGES_OF[
+                    spec.name].format(key=re.escape(key)))
+
+    @per_list
+    def test_the_data_is_in_widgets_with_h3_headings(
+            self, spec: MainList) -> None:
+        for pane in self.selected(spec):
+            with self.subTest(record=pane.get("data-item")):
+                found = pane_widgets(pane)
+                self.assertTrue(found, "the pane holds no widget")
+                for each in found:
+                    head = each.find(cls="widget__head")
+                    self.assertIsNotNone(head)
+                    self.assertIsNotNone(head.find("h3"), head.text())
+                    self.assertIsNone(head.find("h2"), head.text())
+                    self.assertIsNotNone(
+                        has_ancestor_class(each, "widget-grid"),
+                        head.text())
+
+    @per_list
+    def test_the_titles_are_the_only_h2_of_a_pane(
+            self, spec: MainList) -> None:
+        for pane in self.selected(spec):
+            with self.subTest(record=pane.get("data-item")):
+                self.assertLessEqual(
+                    {h.get("id") for h in pane.find_all("h2")},
+                    {"item-detail-title", "lot-detail-title"})
+
+    @per_list
+    def test_the_details_endpoint_answers_the_same_head_and_widgets(
+            self, spec: MainList) -> None:
+        key = self.keys_of(spec)[1]
+        path = spec.details(key) + ("?all=1" if spec.name == "planning"
+                                    else "")
+        found = must_pane(page(self.client.get(path, **HTMX)))
+        head = pane_head(found)
+        self.assertIsNotNone(head)
+        self.assertIsNotNone(head.find("h2", id="item-detail-title"))
+        self.assertTrue(pane_widgets(found))
+
+    @per_list
+    def test_an_empty_list_has_a_note_and_no_head(
+            self, spec: MainList) -> None:
+        if "q" not in spec.searches:
+            return
+        found = must_pane(self.fetch(f"{spec.path}?q=no-such-text-9"))
+        self.assertIsNone(pane_head(found))
+        self.assertEqual(pane_widgets(found), [])
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +452,10 @@ class HeaderTests(MainListCase):
                         continue
                     link = link_of(cell)
                     wanted = {"sort": [key], "selected": [chosen]}
+                    if spec.name in CATEGORY_LISTS:
+                        # The lot is part of the address (Lists by
+                        # substance), so the links keep it.
+                        wanted["lot"] = lot_marked(root)
                     if key == forced and not descending:
                         wanted["dir"] = ["desc"]
                     self.assertEqual(query_of(link.get("href")), wanted,
@@ -335,7 +575,7 @@ class SelectionTests(MainListCase):
         root = self.fetch(f"{spec.path}?selected={second}")
         marks = [e for e in root.walk()
                  if e.get("aria-current") == "true"
-                 and e.tag == "tr"]
+                 and e.tag == "tr" and not in_detail_pane(e)]
         self.assertEqual(len(marks), 1)
 
     def test_selecting_a_record_of_a_new_split_list(self) -> None:
@@ -370,8 +610,7 @@ class ViewTests(MainListCase):
         if cookie is not None:
             self.client.cookies[spec.cookie] = cookie
         root = self.fetch(spec.path)
-        layout = root.find("div", cls="item-layout")
-        self.assertIsNotNone(layout, "the page has no split layout")
+        layout = must_outer_split(root)
         chosen = [radio.get("value") for radio in root.find_all(
             "input", attrs={"name": "view"}) if "checked" in radio.attrs]
         self.assertEqual(chosen, [layout.get("data-view")])
@@ -459,6 +698,42 @@ class DetailsEndpointTests(MainListCase):
                 replace = response["HX-Replace-Url"]
                 self.assertEqual(urlsplit(replace).path, spec.path)
                 self.assertEqual(query_of(replace).get("selected"), [key])
+
+    def test_a_nested_level_answers_with_its_own_pane(self) -> None:
+        """Scenario: Split-view detail response sets HX-Replace-Url (a
+        nested level)."""
+        for name in ("intermediate", "chemical"):
+            spec = MAIN_LISTS[name]
+            with self.subTest(list=name):
+                key = self.keys_of(spec)[1]
+                lots = lot_keys(self.fetch(f"{spec.path}?selected={key}"))
+                self.assertGreater(len(lots), 0)
+                path = f"{spec.details(key)}lots/{lots[-1]}/"
+                current = {**HTMX, "HTTP_HX_CURRENT_URL":
+                           f"http://testserver{spec.path}?q=&selected=x"}
+                response = self.client.get(path, **current)
+                self.assertEqual(response.status_code, 200)
+                root = page(response)
+                for tag in ("html", "head", "body", "main", "nav"):
+                    self.assertEqual(root.find_all(tag), [])
+                found = [c for c in root.children if isinstance(c, Element)]
+                self.assertEqual(len(found), 1)
+                self.assertEqual(found[0].get("id"), "lot-detail")
+                self.assertEqual(found[0].get("data-item"), lots[-1])
+                self.assertEqual(root.find_all(id="item-detail"), [])
+                varied = {part.strip().lower() for part in
+                          response.get("Vary", "").split(",")}
+                self.assertLessEqual({"hx-request", "hx-current-url"},
+                                     varied)
+                address = replaced(self, response)
+                self.assertEqual(urlsplit(address).path, spec.path)
+                self.assertEqual(query_of(address).get("selected"), [key])
+                self.assertEqual(query_of(address).get("lot"), [lots[-1]])
+                foreign = self.client.get(path, **{
+                    **HTMX, "HTTP_HX_CURRENT_URL":
+                    f"http://evil.example{spec.path}?q=x"})
+                self.assertEqual(query_of(replaced(self, foreign)),
+                                 {"selected": [key], "lot": [lots[-1]]})
 
     @per_list
     def test_a_list_with_no_record_has_a_note_in_its_pane(
@@ -591,23 +866,36 @@ class TableClassesTests(MainListCase):
         super().setUp()
         self.client.force_login(self.user)
 
-    def assert_classes(self, root: Element, path: str,
-                       main: int = 0) -> None:
-        """Every table of ROOT carries exactly one of the classes, and
-        MAIN of them is a main table."""
-        grids = root.find_all("table")
-        mains = 0
-        for grid in grids:
+    def assert_classes(self, root: Element, path: str, main: int = 0,
+                       lots: int = 0) -> None:
+        """Every table of ROOT carries exactly one of the classes, MAIN
+        of them is a main table outside the details pane, and LOTS of
+        them, the lot tables of a category list, is one inside it."""
+        mains = in_pane = 0
+        for grid in root.find_all("table"):
             found = grid.classes & {"main-table", "aux-table"}
             self.assertEqual(len(found), 1,
                              f"{path}: a table has classes {grid.classes}")
-            mains += "main-table" in found
+            if "main-table" in found:
+                if in_detail_pane(grid):
+                    in_pane += 1
+                    self.assertEqual(grid.get("id"), LOT_TABLE, path)
+                else:
+                    mains += 1
         self.assertEqual(mains, main, path)
+        self.assertEqual(in_pane, lots, path)
+
+    @staticmethod
+    def lots_of(spec: MainList) -> int:
+        """The lot tables a details pane of the list holds: one in the
+        category lists, whose rows are substances with open vessels."""
+        return 1 if spec.name in ("intermediate", "chemical") else 0
 
     @per_list
     def test_the_main_lists_hold_one_main_table_each(
             self, spec: MainList) -> None:
-        self.assert_classes(self.fetch(spec.path), spec.path, 1)
+        self.assert_classes(self.fetch(spec.path), spec.path, 1,
+                            self.lots_of(spec))
 
     @per_list
     def test_the_details_of_each_list_hold_auxiliary_tables(
@@ -618,7 +906,21 @@ class TableClassesTests(MainListCase):
                 else spec.details(key) + "?all=1"
             response = self.client.get(path, **HTMX)
             self.assertEqual(response.status_code, 200, path)
-            self.assert_classes(page(response), path)
+            self.assert_classes(page(response), path, 0, self.lots_of(spec))
+
+    @per_list
+    def test_a_lot_table_is_a_main_table_that_sorts_in_the_browser(
+            self, spec: MainList) -> None:
+        if not self.lots_of(spec):
+            return
+        found = lot_tables(self.fetch(spec.path))
+        self.assertEqual(len(found), 1)
+        grid = found[0]
+        self.assertEqual(grid.get("id"), LOT_TABLE)
+        self.assertEqual(unsorted_reasons(grid.closest("aside")), [])
+        self.assertIn("data-sortable", grid.attrs)
+        self.assertIn("sortable-table",
+                      (grid.get("data-controller") or "").split())
 
     def test_the_other_pages_hold_auxiliary_tables(self) -> None:
         """Scenario: Two table classes (the pages other than lists)."""

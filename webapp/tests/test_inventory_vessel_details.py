@@ -9,10 +9,11 @@ from inventory.models import Vessel
 from . import Element, make_task, make_vessel, make_withdrawal, page
 from .inventory_support import (VESSELS, InventoryCase, batch_url,
                                 vessel_url)
-from .main_lists_support import (HTMX, body_of, cells, head_cells,
-                                 headers_of, heading_of, link_in, must_pane,
-                                 replaced, rows_of, texts_of_links,
-                                 unsorted_reasons)
+from .main_lists_support import (body_of, cells, has_ancestor_class,
+                                 head_cells, headers_of, heading_of, HTMX,
+                                 link_in, must_pane, pane_head, pane_widgets,
+                                 record_tables, replaced, rows_of,
+                                 texts_of_links, unsorted_reasons)
 from .test_inventory_dialogs import current
 
 OPEN_PAGE = "Gefäßseite öffnen"
@@ -61,6 +62,35 @@ class VesselDetailsCase(InventoryCase):
                  if "Datum" in headers_of(grid)]
         self.assertEqual(len(grids), 1, "the pane has no movements table")
         return grids[0]
+
+
+class HeadAndWidgetsTests(VesselDetailsCase):
+
+    def test_the_head_titles_the_vessel_and_the_data_is_in_widgets(
+            self) -> None:
+        vessel = self.bought()
+        found = self.details(vessel)
+        head = pane_head(found)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"), vessel_url(vessel))
+        self.assertTrue(pane_widgets(found))
+        for each in pane_widgets(found):
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(found):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
+
+    def test_the_secondary_actions_are_in_a_popover(self) -> None:
+        vessel = self.bought()
+        found = self.details(vessel, signed_in=True)
+        menu = found.find(id="item-actions")
+        self.assertIsNotNone(menu)
+        self.assertIn("popover", menu.attrs)
+        self.assertIsNotNone(found.find(
+            "button", attrs={"popovertarget": "item-actions"}))
+        self.assertIn(vessel_url(vessel, "edit"),
+                      [a.get("href") for a in menu.find_all("a")])
 
 
 class DetailsOfAVesselTests(VesselDetailsCase):

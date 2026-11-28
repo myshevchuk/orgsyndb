@@ -21,7 +21,8 @@
 <c-filter-check name="flask" :label="flask_label" :checked="flask" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view" cookie="bulk-list-view">
+<c-split dir="rows" :major="major" cookie="bulk-list-split" outer :view="view" view_cookie="bulk-list-view" level="outer" rows="item-rows" pane="item-detail" param="selected">
+<c-slot name="first"><div class="table-scroll table-sticky">
 <table class="main-table bulk-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#bulk-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
@@ -39,20 +40,13 @@
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
-<header class="detail-head">
-<h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
-<p>{{ batch.substance.article.article_number|default_if_none:_("no number") }} · {{ batch.substance.shown_name }}</p>
-</header>
-<dl class="detail-location">
-<dt>{% translate "Batch" %}</dt><dd><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></dd>
-<dt>{% translate "Source" %}</dt><dd>{% include "inventory/batch_source.html" %}</dd>
-<dt>{% translate "Amount" %}</dt><dd>{{ vessel.amount|in_vessel_unit:vessel }}</dd>
-<dt>{% translate "Location" %}</dt><dd>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</dd>
-<dt>{% translate "Fills" context "bulk" %}</dt><dd>{% with row=chosen %}{% partial fills %}{% endwith %}</dd>
-</dl>
-<p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
-<h3>{% translate "Newest movements" %}</h3>
+</div></c-slot>
+<c-slot name="second">{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}{% translate "Open vessel page" as open_page %}{% translate "Newest movements" as movements_title %}{% translate "Vessel details" as details_title %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
+<c-pane-head :title="vessel" href="/lab/inventory/vessels/{{ vessel.pk }}/" :page_label="open_page">
+<c-slot name="meta">{{ batch.substance.article.article_number|default_if_none:_("no number") }} · {{ batch.substance.shown_name }}</c-slot>
+</c-pane-head>
+<c-widget-grid columns="2">
+<c-widget :title="movements_title" heading="h3" flush>
 <table id="bulk-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Date" %}</th>
@@ -69,11 +63,22 @@
 </tr>
 {% endfor %}</tbody>
 </table>
+</c-widget>
+<c-widget :title="details_title" heading="h3" flush>
+<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Batch" %}</th><td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td></tr>
+<tr><th scope="row">{% translate "Source" %}</th><td>{% include "inventory/batch_source.html" %}</td></tr>
+<tr><th scope="row">{% translate "Amount" %}</th><td>{{ vessel.amount|in_vessel_unit:vessel }}</td></tr>
+<tr><th scope="row">{% translate "Location" %}</th><td>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Fills" context "bulk" %}</th><td>{% with row=chosen %}{% partial fills %}{% endwith %}</td></tr>
+</tbody></table>
+</c-widget>
+</c-widget-grid>
 </aside>
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No vessel is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
-</c-split-layout>
+</c-split>
 {% partialdef fills %}{% for fill in row.fills %}{% if not forloop.first %} {% translate "or" %} {% endif %}{% if fill.count is None %}<span class="badge badge--warning">{% translate "Molar mass missing" %}</span> {{ fill.item.container }}{% elif user.is_authenticated %}<a href="/lab/inventory/items/{{ fill.item.pk }}/fill/?vessel={{ row.vessel.pk }}">{{ fill.count }} × {{ fill.item.container }}</a>{% else %}{{ fill.count }} × {{ fill.item.container }}{% endif %}{% endfor %}{% endpartialdef %}
 {% endblock %}

@@ -54,6 +54,15 @@ class MainList:
         """The keys of the columns that sort."""
         return [key for key in self.keys if key not in self.unsorted]
 
+    @property
+    def layout(self) -> tuple[str, str]:
+        """The direction of the outer split and the side that is larger
+        by default: the delivery list side by side with the pane larger,
+        every other list stacked with the table larger."""
+        if self.name == "delivery":
+            return "columns", "second"
+        return "rows", "first"
+
 
 def _under(prefix: str, suffix: str = "") -> Callable[[str], str]:
     return lambda key: f"{prefix}{key}/{suffix}"
@@ -140,11 +149,99 @@ def main_tables(root: Element) -> list[Element]:
     return root.find_all("table", cls="main-table")
 
 
+def in_detail_pane(node: Element) -> bool:
+    """Whether NODE lies in the details pane ``#item-detail``."""
+    found = node.parent
+    while found is not None:
+        if found.get("id") == "item-detail":
+            return True
+        found = found.parent
+    return False
+
+
+def lot_tables(root: Element) -> list[Element]:
+    """The tables of ROOT that carry ``main-table`` and lie in the
+    details pane: the lot tables of the category lists."""
+    return [grid for grid in main_tables(root) if in_detail_pane(grid)]
+
+
 def main_table(root: Element) -> Element:
-    """The one table of the page that carries ``main-table``."""
-    found = main_tables(root)
-    assert len(found) == 1, f"{len(found)} tables carry main-table"
+    """The one table of the page's list that carries ``main-table``,
+    leaving out the lot tables in its details pane."""
+    found = [grid for grid in main_tables(root)
+             if not in_detail_pane(grid)]
+    assert len(found) == 1, f"{len(found)} list tables carry main-table"
     return found[0]
+
+
+def outer_split(root: Element) -> Element | None:
+    """The outer split of a main list, the one ``div.split--outer``
+    that holds the list's table and its details pane; None when the
+    page has none."""
+    found = root.find_all("div", cls="split--outer")
+    assert len(found) <= 1, f"{len(found)} outer splits"
+    return found[0] if found else None
+
+
+def must_outer_split(root: Element) -> Element:
+    """The outer split of the page ROOT; fail when it has none."""
+    found = outer_split(root)
+    assert found is not None, "the page has no outer split"
+    return found
+
+
+def split_panes(split: Element) -> list[Element]:
+    """The ``div.split__pane`` children of the split SPLIT, in order."""
+    return [child for child in split.children
+            if isinstance(child, Element) and child.tag == "div"
+            and "split__pane" in child.classes]
+
+
+def has_ancestor_class(node: Element, cls: str) -> Element | None:
+    """The nearest ancestor of NODE that carries the class CLS."""
+    found = node.parent
+    while found is not None:
+        if cls in found.classes:
+            return found
+        found = found.parent
+    return None
+
+
+def lot_rows(root: Element) -> list[Element]:
+    """The rows of ``#lot-rows``, the body of a category list's lot
+    table, that carry ``data-item``; fail when the page has none."""
+    body = root.find(id="lot-rows")
+    assert body is not None, "the page has no #lot-rows"
+    return [tr for tr in body.find_all("tr") if "data-item" in tr.attrs]
+
+
+def lot_keys(root: Element) -> list[str]:
+    """The ``data-item`` of every lot row, in page order."""
+    return [tr.get("data-item") for tr in lot_rows(root)]
+
+
+def lot_marked(root: Element) -> list[str]:
+    """The ``data-item`` of every lot row that carries ``aria-current``."""
+    return [tr.get("data-item") for tr in lot_rows(root)
+            if tr.get("aria-current") == "true"]
+
+
+def lot_pane(root: Element) -> Element:
+    """The lot's details ``#lot-detail`` of the page or fragment ROOT;
+    fail when it holds none."""
+    found = root.find(id="lot-detail")
+    assert found is not None, "the page has no #lot-detail"
+    return found
+
+
+def pane_head(scope: Element) -> Element | None:
+    """The ``header.pane-head`` of the details pane SCOPE."""
+    return scope.find("header", cls="pane-head")
+
+
+def pane_widgets(scope: Element) -> list[Element]:
+    """The widgets in the details pane SCOPE, nested ones included."""
+    return scope.find_all(cls="widget")
 
 
 def head_cells(root: Element) -> list[Element]:
@@ -221,11 +318,13 @@ def cells(row: Element) -> list[Element]:
 
 
 def texts_of_links(scope: Element) -> dict[str, str]:
-    """The addresses of the links in SCOPE by their text; of two links
+    """The addresses of the links in SCOPE by their text, without an
+    arrow that ends it, as ``Gefäßseite öffnen →`` is read; of two links
     with one text, the first."""
     found: dict[str, str] = {}
     for link in scope.find_all("a"):
-        found.setdefault(link.text(), link.get("href", ""))
+        found.setdefault(link.text().removesuffix("→").strip(),
+                         link.get("href", ""))
     return found
 
 
@@ -259,6 +358,13 @@ def is_sortable(grid: Element) -> bool:
             and bool(grid.get("id")))
 
 
+def record_tables(scope: Element) -> list[Element]:
+    """The tables in SCOPE that are not key-value tables: those that
+    list records."""
+    return [grid for grid in scope.find_all("table")
+            if "kv-table" not in grid.classes]
+
+
 def lists_records(grid: Element) -> bool:
     """Whether the table GRID lists records one per row: it is neither a
     key-value table, nor a consumption table, whose rows are headed by
@@ -278,18 +384,24 @@ def in_history(grid: Element) -> bool:
     while node is not None:
         if "widget" in node.classes:
             head = node.find(cls="widget__head")
-            title = head.find("h2") if head is not None else None
+            title = head.find(("h2", "h3")) if head is not None else None
             return title is not None and any(
                 name in title.text() for name in ("Änderungen", "History"))
         node = node.parent
     return False
 
 
+# The id of the lot table in the details of a category list, the one
+# table of a pane that is a main table.
+LOT_TABLE = "category-lots"
+
+
 def unsorted_reasons(scope: Element) -> list[str]:
     """What keeps each table in SCOPE that lists records one per row from
     being client-sortable (web-app: Widgets), as a message each; empty
-    when every such table is sortable, an auxiliary table and unique by
-    its ``id``."""
+    when every such table is sortable, unique by its ``id``, and an
+    auxiliary table, or a main table when it is the lot table
+    ``LOT_TABLE`` of a category list."""
     found = []
     ids: dict[str, int] = {}
     for grid in scope.find_all("table"):
@@ -299,8 +411,10 @@ def unsorted_reasons(scope: Element) -> list[str]:
         if not lists_records(grid):
             continue
         name = grid.get("id") or "<no id>"
-        if "aux-table" not in grid.classes:
-            found.append(f"{name}: not an aux-table")
+        wanted = "main-table" if name == LOT_TABLE else "aux-table"
+        if wanted not in grid.classes or len(
+                grid.classes & {"main-table", "aux-table"}) != 1:
+            found.append(f"{name}: not only a {wanted}")
         if not is_sortable(grid):
             found.append(f"{name}: not sortable")
         if ids.get(grid.get("id"), 0) > 1:

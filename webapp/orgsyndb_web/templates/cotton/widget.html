@@ -1,10 +1,10 @@
-<c-vars id="" title="" count="" count_attr="" note="" note_class="" collapsible="" open="" flush="" extra_class="" />{% if collapsible %}<details{% if id %} id="{{ id }}"{% endif %} class="widget{% if extra_class %} {{ extra_class }}{% endif %}"{% if open %} open{% endif %}>
-<summary class="widget__head"><h2>{{ title }}</h2>{% if count != "" %}<span class="widget__count"{% if count_attr %} {{ count_attr }}{% endif %}>{{ count }}</span>{% endif %}{% if note %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note }}</span>{% elif note_slot %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note_slot }}</span>{% endif %}{{ head_extra }}</summary>
+<c-vars id="" title="" heading="h2" count="" count_attr="" note="" note_class="" collapsible="" open="" flush="" extra_class="" />{% if collapsible %}<details{% if id %} id="{{ id }}"{% endif %} class="widget{% if extra_class %} {{ extra_class }}{% endif %}"{% if open %} open{% endif %}>
+<summary class="widget__head">{% if heading == "h3" %}<h3>{{ title }}</h3>{% else %}<h2>{{ title }}</h2>{% endif %}{% if count != "" %}<span class="widget__count"{% if count_attr %} {{ count_attr }}{% endif %}>{{ count }}</span>{% endif %}{% if note %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note }}</span>{% elif note_slot %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note_slot }}</span>{% endif %}{{ head_extra }}</summary>
 {{ before_body }}<div class="widget__body{% if flush %} widget__body--flush{% endif %}">
 {{ slot }}
 </div>
 </details>{% else %}<section{% if id %} id="{{ id }}"{% endif %} class="widget{% if extra_class %} {{ extra_class }}{% endif %}">
-<div class="widget__head"><h2>{{ title }}</h2>{% if count != "" %}<span class="widget__count"{% if count_attr %} {{ count_attr }}{% endif %}>{{ count }}</span>{% endif %}{% if note %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note }}</span>{% elif note_slot %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note_slot }}</span>{% endif %}{{ head_extra }}</div>
+<div class="widget__head">{% if heading == "h3" %}<h3>{{ title }}</h3>{% else %}<h2>{{ title }}</h2>{% endif %}{% if count != "" %}<span class="widget__count"{% if count_attr %} {{ count_attr }}{% endif %}>{{ count }}</span>{% endif %}{% if note %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note }}</span>{% elif note_slot %}<span class="widget__note{% if note_class %} {{ note_class }}{% endif %}">{{ note_slot }}</span>{% endif %}{{ head_extra }}</div>
 {{ before_body }}<div class="widget__body{% if flush %} widget__body--flush{% endif %}">
 {{ slot }}
 </div>

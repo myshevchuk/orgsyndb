@@ -2671,10 +2671,25 @@ stays **Endprodukte** on all three.
 - **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, counts
   delivery notes. Use it to find a past delivery or book a new one.
 
+On the lab's main lists, choose **Tabelle** (**Table**) to compare rows
+or **Details** to see the selected record and the table together. The
+default split puts the table above the details and gives the table more
+space. On **Lieferungen** (**Deliveries**), the table and details sit
+side by side by default, with more space for the details. Click
+**Größere Fläche: Tabelle | Details** (**Larger area: table | details**)
+to give the other pane more space. Your browser remembers that choice
+separately for each list.
+
+The details pane groups the record's data in titled sections called
+widgets. Its header shows the record's title and a link to its full
+page. When available, the main action appears in the header and other
+actions appear under **Aktionen** (**Actions**).
+
 With the sidebar open, the lab's main tables are designed to fit a
-window 1650 px wide. At window widths of 900 px and up, scroll inside
-the inventory tables and details panes. Table headers stay in view.
-In narrower windows the page scrolls.
+window 1650 px wide. At window widths of 900 px and up, tables and
+individual widgets scroll in their own areas. The main table headers
+stay in view. In narrower windows, side-by-side panes stack and the
+page scrolls.
 
 #### Find intermediates and commercial chemicals
 
@@ -2715,17 +2730,27 @@ subgroups, by **Lieferant** (**Supplier**) to find a supplier's stock,
 or by **Nur versiegelt** (**Sealed only**) to find sealed vessels.
 **+hergestellt** (**+made**) marks substances that also have made stock.
 
-Choose **Details** and select a row to see the vessels included in its
-totals. In the desktop layout, the vessel table opens below the
-substance list. It shows each vessel's batch, amount, location, source,
-batch date and note. For bought stock it also shows **Angebrochen am**
-(**Opened on**). If the selection shows one vessel, you also see its
-five newest movements.
+Choose **Details** and select a substance to see the vessels included
+in its totals. On a wide screen, the lot table sits beside the selected
+vessel's details. Each row in the lot table represents one vessel and
+shows its batch, amount, location, source and batch date. For bought
+stock it also shows **Angebrochen am** (**Opened on**). Click a column
+heading to sort the lot table.
 
-Sign in to use **Entnahme** (**Withdraw**), **Umfüllen** (**Transfer**),
-**Korrigieren** (**Correct**) or **Bearbeiten** (**Edit**) beside a
-vessel. Each opens a dialog and updates the list when you save. To
-[record a batch](#record-a-batch), choose **Neue Charge** (**New batch**)
+The first vessel is selected by default. Click a vessel's row away from
+its links, or press ↑ or ↓ while focus is in the lot table, to select
+another vessel. The address records the selection as `lot=<vessel id>`
+so you can return to the same vessel while it still matches the filters.
+Read its note under **Gefäßdaten** (**Vessel details**) and its five
+newest movements under **Letzte Buchungen** (**Newest movements**).
+Choose **Gefäßseite öffnen** (**Open vessel page**) for the full ledger.
+
+When you sign in, the lot header offers **Entnahme** (**Withdraw**).
+Open **Aktionen** (**Actions**) for **Umfüllen** (**Transfer**),
+**Korrigieren** (**Correct**) or **Bearbeiten** (**Edit**). Each opens a
+dialog and updates the list when you save.
+
+To [record a batch](#record-a-batch), choose **Neue Charge** (**New batch**)
 on **Zwischenprodukte** or **Wareneingang** (**Goods receipt**) on
 **Handelschemikalien**. **Wareneingang** opens the new-batch form with
 **gekauft** (**bought**) selected. The buttons in **Details** also
@@ -2814,8 +2839,7 @@ import.
 
 Use the switch at the right end of the **Gebinde** toolbar. Choose
 **Tabelle** (**Table**) to compare items or **Details** to find where
-the selected item is stored and read its consumption figures. The
-details pane opens beside the table or below it in a narrow window.
+the selected item is stored and read its consumption figures.
 
 Both views always show all eleven columns in the same order.
 From left to right, they are **Artikelnr.** (**Article no.**), **Name**,
@@ -2854,41 +2878,45 @@ names no listed item, the list selects its first row. An empty list has
 no selection. Share the address to select the same item in the
 recipient's own view.
 
-The pane shows the item's name, article number when present, container
-size and category when set. It marks new items with **neu** (**new**) and
-shows the status of items set aside. It also gives the stock count,
-stock level and coverage in quarters. Choose **Artikelseite öffnen**
-(**Open item page**) to read the full item page, including its quarterly
-mean and stock movements. When you sign in, you can use the available
-actions, such as **Fill** and **Correct count**, directly from the pane.
-**Fill**, **Correct count**, **Enter consumption**, **Edit** and **Enter
-article number**, in the pane and on the item page, and **Reverse** on
-the item page, open their forms in a dialog over the page; **Book
-delivery** opens the delivery note form as a page. Saving closes the
-dialog and updates the page in place with a confirmation, keeping your
-filters, chosen item and ticked rows. **Abbrechen** (**Cancel**), the
-close button or Escape closes the dialog without saving. A form opened
-in a new tab still works as a page of its own.
+The pane's header shows the item's name, article number when present,
+container size and category when set. It marks new items with **neu**
+(**new**) and shows the status of items set aside. Choose **Artikelseite
+öffnen** (**Open item page**) to read the full item page, including its
+quarterly mean and stock movements.
 
-Under **Fertige Gebinde** (**Finished containers**), read **Fach** and
-**Box** to find the finished containers. Each empty field reads **nicht
-hinterlegt** (**not recorded**). Under **Bulk, separat gelagert**
-(**Bulk, stored separately**), read the amounts by unit and how many
-whole containers of the selected size the bulk can fill. The pane lists
-each open vessel of the substance with its batch and amount. It shows
-the location when recorded.
+When you sign in, the header offers **Book delivery** for a numbered
+item or **Enter article number** for an unnumbered item. **Book delivery**
+opens the delivery note form as a page. Under **Aktionen** (**Actions**),
+choose **Fill**, **Correct count**, **Edit** or, for numbered items,
+**Enter consumption**. These actions and **Enter article number** open
+dialogs from both the pane and the item page. **Reverse** on the item
+page also opens a dialog. Saving closes the dialog and updates the page
+in place with a confirmation, keeping your filters, chosen item and
+ticked rows. **Abbrechen** (**Cancel**), the close button or Escape
+closes the dialog without saving. A form opened in a new tab still works
+as a page of its own.
+
+Under **Bestand & Lagerort** (**Stock and location**), read the stock
+count, stock level, coverage in quarters, this year's consumption to
+date in containers and the means per year and per quarter. A dash (`–`)
+marks a missing mean or coverage. Read **Fach** and **Box** to find the
+finished containers. Each empty location field reads **nicht hinterlegt**
+(**not recorded**). The item's **Bemerkung** (**Note**) appears here when
+present.
+
+Under **Bulk**, read the amounts by unit and how many whole containers
+of the selected size the bulk can fill. The widget lists each open
+vessel of the substance with its batch and amount. It shows the
+location when recorded.
 Without a location, a flask shows **Kolben** (**Flask**) and a stored
 vessel shows **nicht hinterlegt**. Select a vessel to open its page.
 
-Under **Verbrauch** (**Consumption**), read this year's consumption to
-date in containers and the means per year and per quarter. A dash (`–`)
-marks a missing mean or coverage. The bar chart shows this year's
+Under **Verbrauch** (**Consumption**), the bar chart shows this year's
 quarters and marks the current one **laufend** (**running**). The table
 shows each quarter and the annual total for this year and the previous
 two years. Future quarters have no bars and stay empty in the table.
-The pane lists the years with positive consumption entered by hand and
-reminds you that the current year's total is incomplete. The item's
-**Bemerkung** (**Note**) appears below the figures when present.
+The widget lists the years with positive consumption entered by hand
+and reminds you that the current year's total is incomplete.
 
 The **Bestand** column shows container counts alone, coloured by stock
 level. Hover over a count to read the level's name; screen readers also
@@ -3027,9 +3055,10 @@ search by number or recipient. In both views, each row shows the note's
 number, date, recipient and number of lines. Marks beside the number
 show whether the note was **nachgetragen** (**entered later**),
 **storniert** (**reversed**) or **teilweise storniert** (**partly
-reversed**). In **Details**, select a row to read the delivery lines,
-including the article, batch and container count for each. Choose
-**Lieferschein öffnen** (**Open delivery note**) to open the note's page.
+reversed**). In **Details**, select a row and read the article, batch
+and container count for each delivery line under **Zeilen** (**Lines**).
+Choose **Lieferschein öffnen** (**Open delivery note**) to open the note's
+page.
 
 On the note page, each batch links to its own page. Each line also
 shows the item's current **Fach** and **Box**, including on historical
@@ -3232,8 +3261,9 @@ Each vessel keeps its batch and unit and stays a flask or a stored vessel.
 
 For a vessel of a bought batch, choose **Details** in **Alle Gefäße**
 and select its row. Read the opening date or **versiegelt** (**sealed**)
-under **Angebrochen** (**Opened**). The vessel page shows the same
-information under **Zustand** (**State**).
+under **Angebrochen** (**Opened**) in the **Gefäßdaten** (**Vessel
+details**) widget. The vessel page shows the same information under
+**Zustand** (**State**).
 
 A vessel you enter for a bought batch starts sealed. The first filling,
 withdrawal or transfer out marks it opened on the movement's date. If a
@@ -3280,10 +3310,11 @@ can fill at each size, for example `25 × 100 mg oder 2 × 1 g`. Read
 the sizes as alternatives. **Molmasse fehlt** (**Molar mass missing**)
 beside a size means the application needs the molar mass to calculate
 that count. When you sign in, choose a count and size to open
-**Abfüllen** (**Fill**) with that vessel selected. Use **Details** to
-see the selected vessel's batch, source, amount, location, filling
-options and five newest movements. Choose **Gefäßseite öffnen**
-(**Open vessel page**) to read its full ledger.
+**Abfüllen** (**Fill**) with that vessel selected. In **Details**,
+**Gefäßdaten** (**Vessel details**) shows the selected vessel's batch,
+source, amount, location and filling options. **Letzte Buchungen**
+(**Newest movements**) shows its five newest movements. Choose
+**Gefäßseite öffnen** (**Open vessel page**) to read its full ledger.
 
 On an item page, choose **Abfüllen** (**Fill**) and select an open
 vessel of the same substance. The form shows the vessels' kind,

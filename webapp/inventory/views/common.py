@@ -1,17 +1,16 @@
-"""Shared paths, navigation, master-detail, dialog, and URL helpers for
-inventory views."""
+"""Shared paths, navigation, dialog, and URL helpers for inventory views."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import date
 from functools import wraps
-from typing import Any, TypeVar
+from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.forms import BaseForm
-from django.http import HttpRequest, HttpResponse, QueryDict
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -23,8 +22,6 @@ from inventory.bookings import Refused
 from inventory.forms import show_refusal
 from inventory.models import Article, Batch, DeliveryNote, Item, Vessel
 from inventory.summaries import natural
-
-T = TypeVar("T")
 
 LIST = "/lab/inventory/end-products/"
 INTERMEDIATES = "/lab/inventory/intermediates/"
@@ -41,6 +38,14 @@ INTERMEDIATE_COOKIE = "intermediate-list-view"
 CHEMICAL_COOKIE = "chemical-list-view"
 BATCH_COOKIE = "batch-list-view"
 VESSEL_COOKIE = "vessel-list-view"
+
+ITEM_SPLIT_COOKIE = "item-list-split"
+BULK_SPLIT_COOKIE = "bulk-list-split"
+NOTE_SPLIT_COOKIE = "delivery-list-split"
+INTERMEDIATE_SPLIT_COOKIE = "intermediate-list-split"
+CHEMICAL_SPLIT_COOKIE = "chemical-list-split"
+BATCH_SPLIT_COOKIE = "batch-list-split"
+VESSEL_SPLIT_COOKIE = "vessel-list-split"
 
 
 def batch_source_text(batch: Batch) -> str:
@@ -106,54 +111,6 @@ def open_vessels(item: Item | None = None) -> list[Vessel]:
     if item is not None:
         vessels = vessels.filter(batch__substance_id=item.article_id)
     return sorted(vessels, key=oldest_vessel_order)
-
-
-def list_view(request: HttpRequest, cookie: str) -> str:
-    """Return the view of a list with two views that the cookie COOKIE
-    remembers, ``details`` or else ``table``."""
-    return "details" if request.COOKIES.get(cookie) == "details" \
-        else "table"
-
-
-def pick_selected(rows: Sequence[T], wanted: str,
-                  key: Callable[[T], Any]) -> tuple[T | None, str]:
-    """Select the row in ROWS whose stringified KEY equals WANTED, else
-    the first row, else None; return the chosen row and its string key
-    (empty when ROWS is empty)."""
-    for row in rows:
-        row_key = str(key(row))
-        if row_key == wanted:
-            return row, row_key
-    if not rows:
-        return None, ""
-    return rows[0], str(key(rows[0]))
-
-
-def htmx_detail_or_redirect(request: HttpRequest, base_url: str,
-                            selected: Any, template: str,
-                            context_fn: Callable[[], dict[str, Any]],
-                            keep_query: bool = False) -> HttpResponse:
-    """Render TEMPLATE with CONTEXT_FN() and ``HX-Replace-Url`` for an
-    htmx request, or redirect non-htmx requests to BASE_URL with
-    ``selected`` set to SELECTED."""
-    if not request.htmx:
-        if keep_query:
-            params = request.GET.copy()
-            params["selected"] = str(selected)
-            return redirect(f"{base_url}?{params.urlencode()}")
-        return redirect(f"{base_url}?{urlencode({'selected': selected})}")
-    response = render(request, template, context_fn())
-    current = request.htmx.current_url or ""
-    if current and url_has_allowed_host_and_scheme(
-            current, {request.get_host()}, request.is_secure()):
-        params = QueryDict(urlsplit(current).query, mutable=True)
-    elif keep_query:
-        params = request.GET.copy()
-    else:
-        params = QueryDict(mutable=True)
-    params["selected"] = str(selected)
-    response["HX-Replace-Url"] = f"{base_url}?{params.urlencode()}"
-    return response
 
 
 def for_dialog(request: HttpRequest) -> bool:

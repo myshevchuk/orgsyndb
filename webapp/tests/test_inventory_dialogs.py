@@ -35,6 +35,7 @@ from .inventory_support import (
     num,
     snapshot,
 )
+from .main_lists_support import must_outer_split
 from .test_inventory_detail import pane_of
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -774,13 +775,13 @@ class MarkupTests(DialogCase):
                     self.client.cookies.pop("item-list-view", None)
                 else:
                     self.client.cookies["item-list-view"] = cookie
-                layout = self.listing().find(cls="item-layout")
+                layout = must_outer_split(self.listing())
                 self.assertEqual(layout.get("data-view"), view)
 
     def test_the_parts_are_marked_in_the_details_view_too(self) -> None:
         self.client.cookies["item-list-view"] = "details"
         root = self.listing()
-        self.assertEqual(root.find(cls="item-layout").get("data-view"),
+        self.assertEqual(must_outer_split(root).get("data-view"),
                          "details")
         for name, node in (("details", pane_of(root)),
                            ("table body", root.find("tbody")),
@@ -829,7 +830,7 @@ class MarkupTests(DialogCase):
         pane = pane_of(root)
         self.assertEqual(pane.get("data-item"), str(self.target.pk))
         self.assertIsNotNone(region(pane))
-        self.assertTrue(has_number(pane.find("dl").text(), "3"))
+        self.assertTrue(has_number(pane.text(), "3"))
 
 
 class ScriptsTests(DialogCase):

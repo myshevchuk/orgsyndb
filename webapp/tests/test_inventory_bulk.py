@@ -33,7 +33,9 @@ from .inventory_support import (
     item_url,
     vessel_url,
 )
-from .main_lists_support import strong_columns
+from .main_lists_support import (has_ancestor_class, must_pane, pane_head,
+                                 pane_widgets, record_tables,
+                                 strong_columns)
 
 BULK = "/lab/inventory/end-products/bulk/"
 COOKIE = "bulk-list-view"
@@ -456,7 +458,7 @@ class BulkDetailTests(BulkCase):
                          if "/vessels/" in a.get("href", "")], [])
 
     def test_bulk_details_fragment_and_movements(self) -> None:
-        """Requirement: Bulk list ("The details view shows beside the table
+        """Requirement: Bulk list ("The details view shows, with the table,
         the selected vessel: its batch, source, amount, location, the
         containers it would fill, and its five newest movements as the vessel
         page shows them, with a link to the vessel's page.")."""
@@ -490,6 +492,25 @@ class BulkDetailTests(BulkCase):
         varied = {name.strip().lower() for name in
                   response.get("Vary", "").split(",")}
         self.assertIn("hx-request", varied)
+
+    def test_the_details_are_a_head_and_widgets(self) -> None:
+        """The vessel's details: its title in a head that links to the
+        vessel's page, and its data and movements in widgets."""
+        self.item("CH-0012")
+        vessel = self.vessel("CH-0012", number="KL0412", location="Regal 3")
+        pane = must_pane(page(self.client.get(detail_url(vessel), **HTMX)))
+        head = pane_head(pane)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"), vessel_url(vessel))
+        found = pane_widgets(pane)
+        self.assertTrue(found)
+        for each in found:
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(pane):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
+        self.assertIn("Regal 3", pane.text())
 
     def test_bulk_details_non_htmx_redirects_and_missing_is_404(
             self) -> None:

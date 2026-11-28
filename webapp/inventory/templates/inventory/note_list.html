@@ -16,7 +16,8 @@
 <c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view" cookie="delivery-list-view">
+<c-split dir="columns" :major="major" cookie="delivery-list-split" outer :view="view" view_cookie="delivery-list-view" level="outer" rows="item-rows" pane="item-detail" param="selected">
+<c-slot name="first"><div class="table-scroll table-sticky">
 <table class="main-table note-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#note-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
@@ -30,12 +31,21 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
-<header class="detail-head">
-<h2 id="item-detail-title"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</h2>
-<p>{{ note.date }} · {{ note.recipient }}</p>
-</header>
-<p class="detail-links"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{% translate "Open delivery note" %}</a></p>
+</div></c-slot>
+<c-slot name="second">{% partialdef detail inline %}{% if note %}{% translate "Open delivery note" as open_page %}{% translate "Delivery note" as note_title %}{% translate "Lines" as lines_title %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
+<c-pane-head :title="note" href="/lab/inventory/deliveries/{{ note.pk }}/" :page_label="open_page">
+<c-slot name="title_extra">{% include "inventory/note_marks.html" %}</c-slot>
+<c-slot name="meta">{{ note.date }} · {{ note.recipient }}</c-slot>
+</c-pane-head>
+<c-widget-grid columns="1">
+<c-widget :title="note_title" heading="h3" flush>
+<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Date" %}</th><td>{{ note.date }}</td></tr>
+<tr><th scope="row">{% translate "Recipient" %}</th><td>{{ note.recipient }}</td></tr>
+</tbody></table>
+{% if note.note %}<div class="item-note">{{ note.note|linebreaks }}</div>
+{% endif %}</c-widget>
+<c-widget :title="lines_title" heading="h3" flush>
 <table id="note-detail-lines" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Article no." %}</th>
@@ -54,12 +64,12 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-{% if note.note %}<h3>{% translate "Note" context "inventory" %}</h3>
-<div class="lab-note">{{ note.note|linebreaks }}</div>
-{% endif %}</aside>
+</c-widget>
+</c-widget-grid>
+</aside>
 {% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No delivery note is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
-</c-split-layout>
+</c-split>
 {% endblock %}

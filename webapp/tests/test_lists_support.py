@@ -8,12 +8,12 @@ from urllib.parse import parse_qsl, urlsplit
 
 from django.template import engines
 from django.template.loader import get_template
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 
 from orgsyndb_web import lists
 from orgsyndb_web.lists import clean_choice, sort_rows
 
-from . import parse
+from . import Element, parse
 
 
 def _reset_loaders(engine) -> None:
@@ -47,26 +47,67 @@ class ListHelpersTests(SimpleTestCase):
         )
 
 
+class SplitMajorTests(SimpleTestCase):
+    """``lists.split_major(request, cookie, default)`` names the larger
+    side of a list's split, ``first`` or ``second``, as the list's cookie
+    remembers it."""
+
+    def major(self, value: str | None, default: str = "first") -> str:
+        request = RequestFactory().get("/lab/")
+        if value is not None:
+            request.COOKIES["item-list-split"] = value
+        return lists.split_major(request, "item-list-split", default)
+
+    def test_the_cookie_names_the_larger_side(self) -> None:
+        for default in ("first", "second"):
+            for value in ("first", "second"):
+                with self.subTest(default=default, value=value):
+                    self.assertEqual(self.major(value, default), value)
+
+    def test_without_the_cookie_the_default_stands(self) -> None:
+        for default in ("first", "second"):
+            with self.subTest(default=default):
+                self.assertEqual(self.major(None, default), default)
+
+    def test_any_other_value_leaves_the_default(self) -> None:
+        for value in ("", "bogus", "FIRST", "Second", "table", "details",
+                      "first second", " first", "1"):
+            for default in ("first", "second"):
+                with self.subTest(value=value, default=default):
+                    self.assertEqual(self.major(value, default), default)
+
+    def test_only_the_named_cookie_counts(self) -> None:
+        request = RequestFactory().get("/lab/")
+        request.COOKIES["task-list-split"] = "second"
+        self.assertEqual(
+            lists.split_major(request, "item-list-split", "first"), "first")
+        self.assertEqual(
+            lists.split_major(request, "task-list-split", "first"),
+            "second")
+
+
 class CottonPartialCompatibilityTests(SimpleTestCase):
     """Verify django-cotton components work alongside Django 6.0 template
     partials through the configured template backend."""
 
-    def test_partialdef_inside_split_layout_slot_resolves_by_name(
+    def test_partialdef_inside_split_slot_resolves_by_name(
             self) -> None:
         engine = engines["django"].engine
         with TemporaryDirectory() as tmpdir:
             tpl_path = Path(tmpdir) / "probe_list.html"
             tpl_path.write_text(
-                '<c-split-layout view="details" cookie="probe-cookie" '
-                'split scroll_id="category-table-scroll">'
+                '<c-split dir="columns" major="second" '
+                'cookie="probe-cookie">'
+                '<c-slot name="first">'
                 '<table class="main-table"><tbody></tbody></table>'
-                '<c-slot name="detail">'
+                '</c-slot>'
+                '<c-slot name="second">'
                 '{% partialdef detail inline %}'
                 '<aside id="item-detail" data-item="{{ key }}">'
                 '{{ label }}</aside>'
                 '{% endpartialdef %}'
                 '</c-slot>'
-                '</c-split-layout>',
+                '</c-split>',
                 encoding="utf-8",
             )
             orig_dirs = list(engine.dirs)
@@ -76,21 +117,31 @@ class CottonPartialCompatibilityTests(SimpleTestCase):
                 full_tpl = get_template("probe_list.html")
                 full_root = parse(
                     full_tpl.render({"key": "k-1", "label": "Demo"}))
-                layout = full_root.find("div", cls="item-layout")
+                self.assertIsNone(full_root.find("div", cls="item-layout"))
+                layout = full_root.find("div", cls="split")
                 self.assertIsNotNone(layout)
-                self.assertIn("item-layout--split", layout.classes)
-                self.assertEqual(layout.get("data-view"), "details")
-                self.assertEqual(layout.get("data-cookie"), "probe-cookie")
-                scroll = full_root.find("div", id="category-table-scroll")
-                self.assertIsNotNone(scroll)
-                self.assertIn("table-scroll", scroll.classes)
-                self.assertIn("table-sticky", scroll.classes)
-                self.assertIsNotNone(full_root.find("aside", id="item-detail"))
+                self.assertIn("split--columns", layout.classes)
+                self.assertNotIn("split--rows", layout.classes)
+                self.assertEqual(layout.get("data-major"), "second")
+                self.assertIn("split", (layout.get("data-controller")
+                                        or "").split())
+                self.assertEqual(layout.get("data-split-cookie-value"),
+                                 "probe-cookie")
+                panes = [child for child in layout.children
+                         if isinstance(child, Element)]
+                self.assertEqual([pane.tag for pane in panes],
+                                 ["div", "div"])
+                for pane in panes:
+                    self.assertIn("split__pane", pane.classes)
+                self.assertIsNotNone(panes[0].find("table"))
+                self.assertIsNone(panes[0].find("aside"))
+                self.assertIsNotNone(
+                    panes[1].find("aside", id="item-detail"))
 
                 part_tpl = get_template("probe_list.html#detail")
                 part_root = parse(
                     part_tpl.render({"key": "k-2", "label": "Only detail"}))
-                self.assertIsNone(part_root.find("div", cls="item-layout"))
+                self.assertIsNone(part_root.find("div", cls="split"))
                 aside = part_root.find("aside", id="item-detail")
                 self.assertIsNotNone(aside)
                 self.assertEqual(aside.get("data-item"), "k-2")
@@ -108,6 +159,7 @@ class CottonPartialCompatibilityTests(SimpleTestCase):
                 rendered = get_template(name).render({})
                 root = parse(rendered)
                 self.assertIsNone(root.find("div", cls="item-layout"))
+                self.assertIsNone(root.find("div", cls="split--outer"))
                 self.assertIsNotNone(root.find("aside", id="item-detail"))
 
 

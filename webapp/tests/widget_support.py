@@ -2,7 +2,8 @@
 
 A widget is a ``section.widget`` or a ``details.widget`` whose title bar
 (``.widget__head``, the ``summary`` of a ``details``) holds the title in
-an ``h2`` and, where the page gives them, a count (``.widget__count``)
+an ``h2``, or in an ``h3`` in the details pane of a list, and, where the
+page gives them, a count (``.widget__count``)
 and a note (``.widget__note``). A key-value table is a
 ``table.kv-table`` with the key in a row's first cell and its value, in
 which a ``.kv-sub`` line may name the basis, in the second.
@@ -33,10 +34,10 @@ def widgets(root: Element) -> list[Element]:
 
 
 def title_of(found: Element) -> str | None:
-    """The title in the ``h2`` of ``found``'s title bar, without its
-    count and note; None when it has no such title."""
+    """The title in the ``h2`` or ``h3`` of ``found``'s title bar,
+    without its count and note; None when it has no such title."""
     head = found.find(cls="widget__head")
-    heading = head.find("h2") if head is not None else None
+    heading = head.find(("h2", "h3")) if head is not None else None
     return None if heading is None else heading.text(_is_aside)
 
 

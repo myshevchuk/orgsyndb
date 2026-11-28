@@ -1,0 +1,43 @@
+{% load i18n lab inventory %}
+{% translate "Open vessel page" as open_page %}{% translate "Newest movements" as movements_title %}{% translate "Vessel details" as details_title %}<aside id="{{ pane_id }}" class="item-detail"{% if not lot_pane %} data-refresh{% endif %} data-item="{{ vessel.pk }}" aria-labelledby="{{ title_id }}">
+<c-pane-head :title="vessel" href="/lab/inventory/vessels/{{ vessel.pk }}/" :title_id="title_id" :actions_id="actions_id" :page_label="open_page">
+{% if not lot_pane %}<c-slot name="meta">{% substance batch.substance %}{% if vessel.article_number %} · {{ vessel.article_number }}{% endif %}</c-slot>{% endif %}
+{% if user.is_authenticated %}{% if vessel.amount %}<c-slot name="primary"><a class="pane-head__btn" href="/lab/inventory/vessels/{{ vessel.pk }}/withdraw/" data-dialog>{% translate "Withdraw" %}</a></c-slot>{% endif %}
+<c-slot name="menu">{% if vessel.amount %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/transfer/" data-dialog>{% translate "Transfer" %}</a>
+{% endif %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/correct/" data-dialog>{% translate "Correct" %}</a>
+<a href="/lab/inventory/vessels/{{ vessel.pk }}/edit/" data-dialog>{% translate "Edit" %}</a></c-slot>{% endif %}
+</c-pane-head>
+<c-widget-grid :columns="columns">
+{% if lot_pane %}{% partial vessel_data %}{% partial movements %}
+{% else %}{% partial movements %}{% partial vessel_data %}{% endif %}
+</c-widget-grid>
+</aside>
+{% partialdef vessel_data %}
+<c-widget :title="details_title" heading="h3" flush>
+<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Batch" %}</th><td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td></tr>
+<tr><th scope="row">{% translate "Kind" %}</th><td>{{ vessel.kind_label }}</td></tr>
+<tr><th scope="row">{% translate "Amount" %}</th><td>{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Location" %}</th><td>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</td></tr>
+{% if batch.source == "bought" %}<tr><th scope="row">{% translate "Opened" %}</th><td>{% if vessel.opened_on %}{% blocktranslate with date=vessel.opened_on %}Opened on {{ date }}{% endblocktranslate %}{% else %}{% translate "sealed" %}{% endif %}</td></tr>
+{% endif %}<tr><th scope="row">{% translate "Note" context "inventory" %}</th><td>{{ vessel.note|default:"–" }}</td></tr>
+</tbody></table>
+</c-widget>
+{% endpartialdef %}
+{% partialdef movements %}
+<c-widget :title="movements_title" heading="h3" flush>
+<table id="{% if lot_pane %}lot{% else %}vessel{% endif %}-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for row in ledger %}<tr>
+<td data-sort="{{ row.movement.date|date:'Y-m-d' }}">{{ row.movement.date }}</td>
+<td>{{ row.movement.get_kind_display }}</td>
+<td class="number" data-sort="{{ row.movement.amount|base_sort }}">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
+<td>{{ row.movement.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</c-widget>
+{% endpartialdef %}

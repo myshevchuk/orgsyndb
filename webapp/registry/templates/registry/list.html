@@ -19,7 +19,8 @@
 {% endfor %}</c-filter-select>
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view" cookie="substance-list-view">
+<c-split dir="rows" :major="major" cookie="substance-list-split" outer :view="view" view_cookie="substance-list-view" level="outer" rows="item-rows" pane="item-detail" param="selected">
+<c-slot name="first"><div class="table-scroll table-sticky">
 <table class="main-table registry-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
@@ -37,24 +38,14 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if detail_substance %}{% with substance=detail_substance %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ substance.key }}" aria-labelledby="item-detail-title">
-<header class="detail-head">
-<h2 id="item-detail-title"><a href="/lab/registry/substances/{{ substance.key }}/">{{ substance.shown_name }}</a></h2>
-</header>
-{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
-{% endif %}<dl class="detail-location">
-<dt>{% translate "Key" %}</dt><dd>{{ substance.key }}</dd>
-<dt>{% translate "Short name" %}</dt><dd>{{ substance.short_name|default:"–" }}</dd>
-<dt>{% translate "Inventory group" %}</dt><dd>{% if substance.group %}{{ substance.group.shown_label }}{% else %}–{% endif %}</dd>
-<dt>{% translate "Chemical classes" %}</dt><dd>{% for term in detail_classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>
-<dt>{% translate "Formula" %}</dt><dd>{{ substance.formula|default:"–" }}</dd>
-<dt>{% translate "Molar mass" %}</dt><dd>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</dd>
-<dt>{% translate "CAS number" %}</dt><dd>{{ substance.cas|default:"–" }}</dd>
-<dt>{% translate "Article no." %}</dt><dd>{{ substance.article_number|default:"–" }}</dd>
-</dl>
-<p class="detail-links"><a href="/lab/registry/substances/{{ substance.key }}/">{% translate "Open substance page" %}</a></p>
-{% if user.is_authenticated %}<p class="lab-actions"><a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a></p>
-{% endif %}<h3>{% translate "Containers" context "substance" %}</h3>
+</div></c-slot>
+<c-slot name="second">{% partialdef detail inline %}{% if detail_substance %}{% with substance=detail_substance %}{% translate "Open substance page" as open_page %}{% translate "Containers" context "substance" as containers_title %}{% translate "Batches" context "substance" as batches_title %}{% translate "Tasks" as tasks_title %}{% translate "Compound" as compound_title %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ substance.key }}" aria-labelledby="item-detail-title">
+<c-pane-head :title="substance.shown_name" href="/lab/registry/substances/{{ substance.key }}/" :page_label="open_page">
+{% if user.is_authenticated %}<c-slot name="menu"><a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a></c-slot>{% endif %}
+</c-pane-head>
+<c-widget-grid columns="2">
+<div class="widget-grid__col">
+<c-widget :title="containers_title" heading="h3" flush>
 {% if detail_items %}<table id="substance-detail-items" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Container" %}</th>
@@ -68,7 +59,8 @@
 {% endfor %}</tbody>
 </table>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}<h3>{% translate "Batches" context "substance" %}</h3>
+{% endif %}</c-widget>
+<c-widget :title="batches_title" heading="h3" flush>
 {% if detail_batches %}<table id="substance-detail-batches" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Batch" %}</th>
@@ -84,7 +76,8 @@
 {% endfor %}</tbody>
 </table>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}<h3>{% translate "Tasks" %}</h3>
+{% endif %}</c-widget>
+<c-widget :title="tasks_title" heading="h3" flush>
 {% if detail_tasks %}<table id="substance-detail-tasks" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "No." %}</th>
@@ -98,10 +91,26 @@
 {% endfor %}</tbody>
 </table>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}</aside>
+{% endif %}</c-widget>
+</div>
+<c-widget :title="compound_title" heading="h3" flush>
+{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
+{% endif %}<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Key" %}</th><td>{{ substance.key }}</td></tr>
+<tr><th scope="row">{% translate "Short name" %}</th><td>{{ substance.short_name|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Inventory group" %}</th><td>{% if substance.group %}{{ substance.group.shown_label }}{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Chemical classes" %}</th><td>{% for term in detail_classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</td></tr>
+<tr><th scope="row">{% translate "Formula" %}</th><td>{{ substance.formula|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Molar mass" %}</th><td>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "CAS number" %}</th><td>{{ substance.cas|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Article no." %}</th><td>{{ substance.article_number|default:"–" }}</td></tr>
+</tbody></table>
+</c-widget>
+</c-widget-grid>
+</aside>
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No substance is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
-</c-split-layout>
+</c-split>
 {% endblock %}

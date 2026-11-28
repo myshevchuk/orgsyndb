@@ -15,7 +15,8 @@
 <c-filter-check name="empty" :label="empty_label" :checked="empty" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view" cookie="vessel-list-view">
+<c-split dir="rows" :major="major" cookie="vessel-list-split" outer :view="view" view_cookie="vessel-list-view" level="outer" rows="item-rows" pane="item-detail" param="selected">
+<c-slot name="first"><div class="table-scroll table-sticky">
 <table class="main-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#vessel-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
@@ -33,42 +34,10 @@
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if detail_vessel %}{% with vessel=detail_vessel batch=detail_vessel.batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
-<header class="detail-head">
-<h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
-<p>{% substance batch.substance %}{% if vessel.article_number %} · {{ vessel.article_number }}{% endif %}</p>
-</header>
-<dl class="detail-location">
-<dt>{% translate "Batch" %}</dt><dd><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></dd>
-<dt>{% translate "Kind" %}</dt><dd>{{ vessel.kind_label }}</dd>
-<dt>{% translate "Amount" %}</dt><dd>{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</dd>
-<dt>{% translate "Location" %}</dt><dd>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</dd>
-{% if batch.source == "bought" %}<dt>{% translate "Opened" %}</dt><dd>{% if vessel.opened_on %}{% blocktranslate with date=vessel.opened_on %}Opened on {{ date }}{% endblocktranslate %}{% else %}{% translate "sealed" %}{% endif %}</dd>
-{% endif %}<dt>{% translate "Note" context "inventory" %}</dt><dd>{{ vessel.note|default:"–" }}</dd>
-</dl>
-<p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
-{% if user.is_authenticated %}<p class="lab-actions">{% if vessel.amount %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/withdraw/" data-dialog>{% translate "Withdraw" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/transfer/" data-dialog>{% translate "Transfer" %}</a> · {% endif %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/correct/" data-dialog>{% translate "Correct" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/edit/" data-dialog>{% translate "Edit" %}</a></p>
-{% endif %}<h3>{% translate "Newest movements" %}</h3>
-<table id="vessel-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
-<thead><tr>
-<th scope="col">{% translate "Date" %}</th>
-<th scope="col">{% translate "Kind" %}</th>
-<th scope="col" class="number">{% translate "Amount" %}</th>
-<th scope="col">{% translate "Note" context "inventory" %}</th>
-</tr></thead>
-<tbody>
-{% for row in ledger %}<tr>
-<td data-sort="{{ row.movement.date|date:'Y-m-d' }}">{{ row.movement.date }}</td>
-<td>{{ row.movement.get_kind_display }}</td>
-<td class="number" data-sort="{{ row.movement.amount|base_sort }}">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
-<td>{{ row.movement.note }}</td>
-</tr>
-{% endfor %}</tbody>
-</table>
-</aside>
-{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+</div></c-slot>
+<c-slot name="second">{% partialdef detail inline %}{% if detail_vessel %}{% with vessel=detail_vessel batch=detail_vessel.batch %}{% include "inventory/vessel_pane.html" with pane_id="item-detail" title_id="item-detail-title" actions_id="item-actions" columns="2" %}{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No vessel is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
-</c-split-layout>
+</c-split>
 {% endblock %}

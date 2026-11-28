@@ -21,12 +21,13 @@ from inventory.forms import (NewVesselForm, TransferForm,
                              WithdrawalForm)
 from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
-from inventory.views.common import (VESSEL_COOKIE, VESSELS, batch_url,
-                                    form_page, htmx_detail_or_redirect,
-                                    item_form, list_view, locations,
-                                    pick_selected, saved, tabs, vessel_url)
+from inventory.views.common import (VESSEL_COOKIE, VESSEL_SPLIT_COOKIE,
+                                    VESSELS, batch_url, form_page, item_form,
+                                    locations, saved, tabs, vessel_url)
 from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
-                                clean_choice, htmx_list_push_url, sort_value)
+                                clean_choice, htmx_detail_or_redirect,
+                                htmx_list_push_url, list_view, pick_selected,
+                                sort_value, split_major)
 
 
 def _vessel_amount_sort(vessel: Vessel) -> Any:
@@ -113,6 +114,7 @@ def vessel_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(VESSELS, filter_pairs, selected,
                                  VESSEL_CLASSES),
         "view": list_view(request, VESSEL_COOKIE),
+        "major": split_major(request, VESSEL_SPLIT_COOKIE, "first"),
         "empty": empty,
         "kind": kind,
         "kinds": VesselKind.choices,

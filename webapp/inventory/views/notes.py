@@ -15,12 +15,12 @@ from inventory import bookings
 from inventory.forms import ROWS, NoteEditForm, NoteForm, ReversalForm
 from inventory.history import history_entries
 from inventory.models import DeliveryLine, DeliveryNote, Item, Movement
-from inventory.views.common import (DELIVERIES, LIST, NOTE_COOKIE, form_page,
-                                    htmx_detail_or_redirect, layers,
-                                    list_view, note_url, pick_selected, saved,
-                                    tabs)
-from orgsyndb_web.lists import (Order, SortColumn, htmx_list_push_url,
-                                sort_value)
+from inventory.views.common import (DELIVERIES, LIST, NOTE_COOKIE,
+                                    NOTE_SPLIT_COOKIE, form_page, layers,
+                                    note_url, saved, tabs)
+from orgsyndb_web.lists import (Order, SortColumn, htmx_detail_or_redirect,
+                                htmx_list_push_url, list_view, pick_selected,
+                                sort_value, split_major)
 
 NOTE_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("number", gettext_lazy("Number"),
@@ -127,6 +127,7 @@ def note_list(request: HttpRequest) -> HttpResponse:
                             "item__article__substance", "batch")))
            if selected_note else {}),
         "view": list_view(request, NOTE_COOKIE),
+        "major": split_major(request, NOTE_SPLIT_COOKIE, "second"),
         "layers": layers(DELIVERIES),
         "q": q,
         "chosen": chosen,
@@ -154,9 +155,9 @@ def note_page(request: HttpRequest, pk: int) -> HttpResponse:
 @vary_on_headers("HX-Request", "HX-Current-URL")
 def note_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
-    the delivery note PK alone, as the delivery list shows them beside
-    its table, and any other request with a redirect to the list with
-    ``selected`` naming the note. Answer 404 for an unknown ID."""
+    the delivery note PK alone, and any other request with a redirect to
+    the list with ``selected`` naming the note. Answer 404 for an
+    unknown ID."""
     note = get_object_or_404(
         DeliveryNote.objects.annotate(line_count=Count("lines")), pk=pk)
     return htmx_detail_or_redirect(
