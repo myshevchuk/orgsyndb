@@ -6,10 +6,8 @@
 // DOM. In a browser document, installs the no-eval htmx morph extension,
 // print-time collapsible widget fallback, and live-list document guards,
 // then starts Stimulus with actionAttribute "data-lab-action" and
-// registers seven controllers:
+// registers five controllers:
 //   - popover-anchor: CSS Anchor Positioning with OrgSynLab.place fallback
-//   - view-menu: outside-click and Escape closing for details.lab-view-menu
-//   - remember: localStorage persistence for [data-remember] controls
 //   - batch-narrow: substance-scoped optgroup narrowing on [data-batch-for]
 //   - sortable-table: client-side sorting on table[data-sortable]
 //   - split-list: master-detail selection and stepping on .main-table
@@ -171,14 +169,6 @@
 
   const plain = (event) => event.button === 0 && !event.ctrlKey
     && !event.metaKey && !event.shiftKey && !event.altKey;
-
-  const storage = (() => {
-    try {
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  })();
 
   const supportsAnchor = () =>
     typeof CSS !== "undefined"
@@ -568,18 +558,13 @@
   };
 
   // Positions .lab-popup[popover] elements via OrgSynLab.place when the
-  // browser lacks full CSS Anchor Positioning, and always closes open
-  // details.lab-view-menu elements when a popover opens.
+  // browser lacks full CSS Anchor Positioning.
   class PopoverAnchorController extends Stimulus.Controller {
     connect() {
       this._open = false;
       this._onReposition = () => this._reposition();
       this._onToggle = (event) => {
         if (event.newState === "open") {
-          for (const menu of document.querySelectorAll(
-            "details.lab-view-menu[open]")) {
-            menu.open = false;
-          }
           if (!supportsAnchor()) {
             this._open = true;
             this.element.dataset.placed = "";
@@ -619,72 +604,6 @@
           height: window.innerHeight });
       this.element.style.left = `${spot.left}px`;
       this.element.style.top = `${spot.top}px`;
-    }
-  }
-
-  // Closes details.lab-view-menu on outside clicks or Escape.
-  class ViewMenuController extends Stimulus.Controller {
-    connect() {
-      this._onDocClick = (event) => {
-        if (!this.element.open || !(event.target instanceof Element)) return;
-        if (!this.element.contains(event.target)) {
-          this.element.open = false;
-        }
-      };
-      this._onDocKeydown = (event) => {
-        if (event.key !== "Escape" || !this.element.open) return;
-        this.element.open = false;
-        const summary = this.element.querySelector(":scope > summary");
-        if (summary) summary.focus();
-      };
-      document.addEventListener("click", this._onDocClick);
-      document.addEventListener("keydown", this._onDocKeydown);
-    }
-
-    disconnect() {
-      document.removeEventListener("click", this._onDocClick);
-      document.removeEventListener("keydown", this._onDocKeydown);
-    }
-  }
-
-  // Restores and persists a [data-remember] control in localStorage.
-  class RememberController extends Stimulus.Controller {
-    connect() {
-      const name = this.element.dataset.remember;
-      if (!name) return;
-      const key = `orgsyndb:${name}`;
-      const checkable = this.element.type === "checkbox";
-      let saved = null;
-      try {
-        saved = storage && storage.getItem(key);
-      } catch {
-        saved = null;
-      }
-      if (saved !== null) {
-        if (checkable) {
-          this.element.checked = saved === "1";
-        } else if ([...this.element.options].some((o) => o.value === saved)) {
-          this.element.value = saved;
-        }
-      }
-      this._onChange = () => {
-        try {
-          if (storage) {
-            storage.setItem(key, checkable
-              ? (this.element.checked ? "1" : "0") : this.element.value);
-          }
-        } catch {
-          // Storage refused: the choice lasts until the page is left.
-        }
-      };
-      this.element.addEventListener("change", this._onChange);
-    }
-
-    disconnect() {
-      if (this._onChange) {
-        this.element.removeEventListener("change", this._onChange);
-        this._onChange = null;
-      }
     }
   }
 
@@ -749,12 +668,6 @@
       return [...document.querySelectorAll(HTMX_ROWS)];
     }
 
-    _syncColumnsButton() {
-      if (this._columnsButton) {
-        this._columnsButton.disabled = this.element.dataset.view === "details";
-      }
-    }
-
     _follow(id) {
       const rows = this._htmxRows();
       const active = id !== ""
@@ -797,10 +710,6 @@
       const checked = this._radios.find((radio) => radio.checked);
       if (checked) this.element.dataset.view = checked.value;
       makeFocusable(this._htmxRows());
-
-      this._columnsButton = document.querySelector(
-        "[popovertarget=columns-menu]");
-      this._syncColumnsButton();
       this._wanted = this.element.dataset.view;
       this._liveTicked = null;
 
@@ -814,7 +723,6 @@
           + " SameSite=Lax";
         const show = () => {
           this.element.dataset.view = this._wanted;
-          this._syncColumnsButton();
         };
         if (document.startViewTransition
             && !window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -1183,8 +1091,6 @@
   const application = Stimulus.Application.start(
     document.documentElement, schema);
   application.register("popover-anchor", PopoverAnchorController);
-  application.register("view-menu", ViewMenuController);
-  application.register("remember", RememberController);
   application.register("batch-narrow", BatchNarrowController);
   application.register("sortable-table", SortableTableController);
   application.register("split-list", SplitListController);

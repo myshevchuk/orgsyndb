@@ -13,8 +13,9 @@ from inventory.bookings import (book_note, correct, fill, reverse,
 from . import Element, make_batch, page
 from .inventory_support import (InventoryCase, batch_url, count_after,
                                 count_beside, has_number, item_url, ledger,
-                                movement_url, note_blocks, note_url,
-                                set_shares)
+                                movement_url, note_url, set_shares)
+from .main_lists_support import must_pane, row_for
+
 
 class StockPageCase(InventoryCase):
     """Two batches of ``cinnamic-acid``."""
@@ -188,10 +189,15 @@ class ItemPageStockTests(StockPageCase):
 
 class NotePageStockTests(StockPageCase):
 
-    def listing(self) -> dict[str, str]:
-        """The text of each note of the delivery list by its number."""
-        return {link.text(): block.text() for link, block in
-                note_blocks(self.show("/lab/inventory/deliveries/"))}
+    def row_of(self, note: Any) -> str:
+        """The text of the row of NOTE in the delivery list's table."""
+        root = self.show("/lab/inventory/deliveries/")
+        return row_for(root, str(note.pk)).text()
+
+    def details_of(self, note: Any) -> Element:
+        """The details pane of the delivery list with NOTE selected."""
+        return must_pane(self.show(
+            f"/lab/inventory/deliveries/?selected={note.pk}"))
 
     def lines_of(self, root: Element, *batches: Any) -> list[Element]:
         """The first row of a note's page that links each batch of
@@ -208,7 +214,11 @@ class NotePageStockTests(StockPageCase):
         link = self.show(note_url(note)).find("a", href=batch_url(self.a))
         self.assertIsNotNone(link)
         self.assertEqual(link.text(), "KL0412")
-        self.assertIn("KL0412", self.listing()["LS-2026-117"])
+        self.assertNotIn("KL0412", self.row_of(note))
+        details = self.details_of(note)
+        self.assertEqual(
+            [a.text() for a in details.find_all("a")
+             if a.get("href") == batch_url(self.a)], ["KL0412"])
 
     def test_a_bought_batch_is_shown_by_its_supplier_batch(self) -> None:
         bought = make_batch(self.kl, "CH-0012", source="bought",
@@ -218,7 +228,10 @@ class NotePageStockTests(StockPageCase):
                          lines=[(item, bought, 2)])
         link = self.show(note_url(note)).find("a", href=batch_url(bought))
         self.assertEqual(link.text(), "MK99")
-        self.assertIn("MK99", self.listing()["LS-1"])
+        self.assertNotIn("MK99", self.row_of(note))
+        self.assertEqual(
+            [a.text() for a in self.details_of(note).find_all("a")
+             if a.get("href") == batch_url(bought)], ["MK99"])
 
     def test_the_lines_of_one_item_show_each_batch(self) -> None:
         item = self.item("CH-0012", quantity=0)
@@ -230,8 +243,13 @@ class NotePageStockTests(StockPageCase):
         self.assertIsNot(first, second)
         self.assertTrue(has_number(first.text(), "2"), first.text())
         self.assertTrue(has_number(second.text(), "3"), second.text())
-        self.assertIn("KL0412", self.listing()["LS-1"])
-        self.assertIn("KL0413", self.listing()["LS-1"])
+        row = self.row_of(note)
+        self.assertNotIn("KL0412", row)
+        self.assertNotIn("KL0413", row)
+        first, second = self.lines_of(self.details_of(note), self.a, self.b)
+        self.assertIsNot(first, second)
+        self.assertTrue(has_number(first.text(), "2"), first.text())
+        self.assertTrue(has_number(second.text(), "3"), second.text())
 
     def test_the_lines_of_a_historical_note_name_their_batch(self) -> None:
         item = self.item("CH-0012", quantity=5)
@@ -240,8 +258,10 @@ class NotePageStockTests(StockPageCase):
         root = self.show(note_url(note))
         self.assertIsNotNone(root.find("a", href=batch_url(self.a)))
         self.assertIn("nachgetragen", root.text())
-        self.assertIn("KL0412", self.listing()["ALT-1"])
-        self.assertIn("nachgetragen", self.listing()["ALT-1"])
+        self.assertNotIn("KL0412", self.row_of(note))
+        self.assertIsNotNone(
+            self.details_of(note).find("a", href=batch_url(self.a)))
+        self.assertIn("nachgetragen", self.row_of(note))
 
     def test_a_line_shows_its_delivery_not_its_assignment(self) -> None:
         item = self.item("CH-0012", quantity=5)
@@ -266,14 +286,14 @@ class NotePageStockTests(StockPageCase):
         first, second = self.lines_of(root, self.a, self.b)
         self.assertIn("storniert", first.text())
         self.assertNotIn("storniert", second.text())
-        self.assertIn("teilweise storniert", self.listing()["LS-1"])
+        self.assertIn("teilweise storniert", self.row_of(note))
 
     def test_a_note_with_an_assignment_is_not_reversed(self) -> None:
         item = self.item("CH-0012", quantity=5)
         note = book_note(self.kl, date=date(2026, 11, 2), number="LS-1",
                          lines=[(item, self.a, 3)])
         self.assertNotIn("storniert", self.show(note_url(note)).text())
-        self.assertNotIn("storniert", self.listing()["LS-1"])
+        self.assertNotIn("storniert", self.row_of(note))
 
     def test_a_note_whose_deliveries_are_reversed_is_reversed(self) -> None:
         first = self.item("CH-0012", quantity=5)
@@ -286,17 +306,17 @@ class NotePageStockTests(StockPageCase):
         text = self.show(note_url(note)).text()
         self.assertIn("storniert", text)
         self.assertNotIn("teilweise", text)
-        self.assertIn("storniert", self.listing()["LS-1"])
-        self.assertNotIn("teilweise", self.listing()["LS-1"])
+        self.assertIn("storniert", self.row_of(note))
+        self.assertNotIn("teilweise", self.row_of(note))
 
     def test_a_note_with_one_delivery_reversed_is_partly_reversed(
             self) -> None:
         first = self.item("CH-0012", quantity=5)
         second = self.item("CH-0012", size="50", quantity=5)
-        book_note(self.kl, date=date(2026, 11, 2), number="LS-1",
-                  lines=[(first, self.a, 2), (second, self.a, 1)])
+        note = book_note(self.kl, date=date(2026, 11, 2), number="LS-1",
+                         lines=[(first, self.a, 2), (second, self.a, 1)])
         reverse(self.kl, first.movements.get(kind="delivery"), note="falsch")
-        self.assertIn("teilweise storniert", self.listing()["LS-1"])
+        self.assertIn("teilweise storniert", self.row_of(note))
 
     def test_a_reversed_historical_note_marks_its_lines(self) -> None:
         item = self.item("CH-0012", quantity=5)
@@ -304,7 +324,7 @@ class NotePageStockTests(StockPageCase):
                          number="ALT-1",
                          lines=[(item, self.a, 4), (item, self.b, 1)])
         reverse_historical(self.kl, note, note="doppelt erfasst")
-        self.assertIn("storniert", self.listing()["ALT-1"])
+        self.assertIn("storniert", self.row_of(note))
         self.assertIn("storniert", self.show(note_url(note)).text())
 
 

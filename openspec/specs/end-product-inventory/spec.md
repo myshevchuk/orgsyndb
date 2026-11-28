@@ -106,7 +106,7 @@ A current note, `historical` off, books for each line an assignment where the li
 ### Requirement: Consumption
 An item SHALL keep entered consumption per quarter, with a change history (web-app "Change history"), a whole number of containers of at least zero for a year and a quarter 1 to 4, not after the current quarter, at most one per quarter; entering a value replaces the quarter's earlier one, and entering none removes it. Entering a value for an item without an article number is refused, zero included. A quarter's consumption is its entered value, zero when there is none, plus the counts of the item's lines, in notes current or historical, dated in it, leaving out reversed movements and reversed historical notes. Quarters and years follow the calendar in `Europe/Berlin`.
 
-The mean per year is the sum of the consumption of the complete calendar years before the current one, from the year of the item's first entered value, zero included, or delivery line that counts as consumption, divided by the number of those years; with none, there is no mean. The mean per quarter is a quarter of the mean per year. An item whose consumption above zero all lies in the current year has projected means instead: the mean per quarter is the current year's consumption times 91.3125 divided by the number of days from the first day of the quarter of its first consumption above zero to today, today included, or by 91.3125 when that is fewer; the mean per year is four times that. Projected means, and a coverage computed from them, are marked `hochgerechnet aus dem laufenden Jahr` (`projected from the current year`) wherever they show. The current year's consumption is that of the current year so far, shown beside the mean for comparison. The coverage is the quantity divided by the mean per quarter, in quarters, and has no value without a mean above zero or for an item whose level is `dormant` or `undelivered`. Means and coverage show to one decimal place, rounded half up; levels compare the unrounded values.
+The mean per year is the sum of the consumption of the complete calendar years before the current one, from the year of the item's first entered value, zero included, or delivery line that counts as consumption, divided by the number of those years; with none, there is no mean. The mean per quarter is a quarter of the mean per year. An item whose consumption above zero all lies in the current year has projected means instead: the mean per quarter is the current year's consumption times 91.3125 divided by the number of days from the first day of the quarter of its first consumption above zero to today, today included, or by 91.3125 when that is fewer; the mean per year is four times that. The current year's consumption is that of the current year so far, shown beside the mean for comparison. The coverage is the quantity divided by the mean per quarter, in quarters, and has no value without a mean above zero or for an item whose level is `dormant` or `undelivered`. Means and coverage show to one decimal place, rounded half up; levels compare the unrounded values.
 
 #### Scenario: Means and coverage
 - **WHEN** on 2026-11-04 an item with 3 containers has the entered value 4 for each quarter of 2024, 5 for each quarter of 2025 and 10 for the first quarter of 2026, and a delivery of 3 dated 2026-10-15
@@ -134,7 +134,7 @@ The mean per year is the sum of the consumption of the complete calendar years b
 
 #### Scenario: Projected means
 - **WHEN** on 2026-11-04 an item with 3 containers has the entered value 6 for the second quarter of 2026 and no other consumption
-- **THEN** its mean per quarter is 2,5, its mean per year 10,1 and its coverage 1,2 quarters, each marked as projected, and its level is watch
+- **THEN** its mean per quarter is 2,5, its mean per year 10,1 and its coverage 1,2 quarters, and its level is watch
 
 #### Scenario: One early delivery
 - **WHEN** on 2026-11-04 an item with 2 containers has a delivery of 3 dated 2026-10-15 and no other consumption
@@ -174,7 +174,7 @@ Every item therefore has a level. Their order, from the most urgent, is out, cri
 ### Requirement: Filling from bulk
 Filling an item SHALL name an open vessel of its substance and the amount taken from it, in the vessel's unit; a filling without a vessel is refused. The proposed amount is the count times the item's size, converted into the vessel's base unit and rounded half up to six places, shown in the vessel's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and vessel entered. When the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's substance in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the vessel's filling are stored in one transaction. An amount above the vessel's, or one that rounds to zero, refuses both.
 
-An item's bulk is the amount in the open vessels of its substance, flasks among them. Wherever an item shows its bulk, it shows that amount by unit and the number of its containers the vessels would still fill. That number is, for each open vessel that converts into the item's unit, its amount converted and divided by the size and rounded down, summed over the vessels. A vessel that does not convert is left out of that number and counted as not convertible.
+An item's bulk is the amount in the open vessels of its substance, flasks among them. The number of its containers the vessels would still fill is, for each open vessel that converts into the item's unit, its amount converted and divided by the size and rounded down, summed over the vessels. A vessel that does not convert is left out of that number and counted as not convertible.
 
 #### Scenario: Filling with conversion
 - **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a vessel of `50` mg, and a signed-in user fills 5 containers from it
@@ -190,28 +190,25 @@ An item's bulk is the amount in the open vessels of its substance, flasks among 
 
 #### Scenario: Containers from bulk
 - **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has one open vessel of `50` mg
-- **THEN** it shows `50 mg` and 33 containers
+- **THEN** its bulk is `50 mg` and would fill 33 containers
 
 #### Scenario: Vessels are not pooled
 - **WHEN** an item of 10 mg has two open vessels of `6` mg
-- **THEN** it shows 0 containers from bulk
+- **THEN** its bulk would fill 0 containers
 
 ### Requirement: Item list
-`/lab/inventory/end-products/` SHALL list the items under the heading `Endprodukte` (`End products`), followed by the number of all items; `/lab/inventory/` redirects to it. It shows them in one of two views, `Tabelle` (`Table`) and `Details` (`Details`). Its table has the base columns, which both views show, first, in this order, and which no user can hide:
+`/lab/inventory/end-products/` SHALL list the items under the heading `Endprodukte` (`End products`), followed by the number of all items; `/lab/inventory/` redirects to it. It shows them in one of two views, `Tabelle` (`Table`) and `Details` (`Details`). Both views show its table, with these columns in this order:
 
 - the article number, linking to the item's page;
 - the name, linking to the substance's page (lab-registry "Registry pages") when the item has an article number and to the item's page when it has none, followed by the mark `neu` (`new`), a `sup.mark-new`, for a new item;
 - the category;
 - the container;
-- the quantity, its cell carrying its level as Stock levels states.
-
-After them come the table view's own columns, which the table view alone shows and of which a user may hide each:
-
+- the quantity, its cell carrying its level as Stock levels states;
 - the mean per year and the current year's consumption, each cell carrying its heat as Consumption heat states;
 - the coverage;
-- the compartment, the box, the bulk as Filling from bulk states, and the note.
+- the compartment, the box, and the item's bulk (Filling from bulk) by unit.
 
-A base column is as wide in one view as in the other. Means and a coverage projected from the current year are marked in their cells as Consumption states. By default the rows are ordered by category regardless of case, items without one last, then by article number, items without one after the others and by name regardless of case, then by container (Items).
+By default the rows are ordered by category regardless of case, items without one last, then by article number, items without one after the others and by name regardless of case, then by container (Items).
 
 GET parameters select the items listed: `q` those in whose article number, category or note, or in whose substance's key, name, German name or short name, the text is found regardless of case; `category`, `compartment` and `box` those with that value; `container` those of that size and unit, given as the size without trailing zeros and the unit's code, such as `2.5 mg` or `10 umol`; and `stock` those at that level, a value that names no level selecting every item. The page shows the value of each filter in force, offers each category, container, compartment and box in use, and offers each level with the number of items at it that the other filters admit, linking to the list with those filters and that level.
 
@@ -219,7 +216,7 @@ A user switches between the views; the browser remembers the view last chosen in
 
 One item listed is selected: the one `selected=<id>` names among those listed; without it, or naming none of them, the first item listed, and none when the list is empty. The selected row is marked in both views. In either view, a click without a modifier key in a row, but not on its links or its check box, selects its item, and so do the arrow keys up and down; a link in a row leads where it links. Selecting an item loads its details in place; once they have arrived its row is marked and the address names it in `selected`, so that a reload selects the same item. The marked row and the address name the item whose details the list holds, also while another item's details are loading and when loading them fails. Filtering the list and changing its order keep the selected item while the list still holds it.
 
-The details view shows, beside the base columns, the details of the selected item: its article number, name and container; its quantity with its level, and its coverage; its compartment and box, each `nicht hinterlegt` (`not recorded`) when it is not set; each open vessel of its substance with its location, or `Kolben` for a flask without one, or `nicht hinterlegt`, its batch and its amount, linking to the vessel's page; its consumption: the current year's so far, the means per year and per quarter, `–` for a mean there is not, and the consumption of each quarter of the current year and of the two years before it, with each year's sum, the quarters to come left empty, and the years whose quarters hold an entered value above zero; its note; and a link to its page, and for a signed-in user the item page's links but `Stornieren` (Item page).
+The details view shows, with the table, the details of the selected item: its article number, name and container; its quantity with its level, and its coverage; its compartment and box, each `nicht hinterlegt` (`not recorded`) when it is not set; each open vessel of its substance with its location, or `Kolben` for a flask without one, or `nicht hinterlegt`, its batch and its amount, linking to the vessel's page, and the number of containers the bulk would still fill (Filling from bulk); its consumption: the current year's so far, the means per year and per quarter, `–` for a mean there is not, and the consumption of each quarter of the current year and of the two years before it, with each year's sum, the quarters to come left empty, and the years whose quarters hold an entered value above zero; its note; and a link to its page, and for a signed-in user the item page's links but `Stornieren` (Item page).
 
 A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of each item that has an article number, a check box `item` with the item's id, belonging to a form that requests `/lab/inventory/deliveries/new/` with the button `Lieferschein mit Auswahl` (`Delivery note from selection`). On paper the list prints every row of its table, without the details.
 
@@ -263,14 +260,6 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **WHEN** the database holds `CH-0012` `(E)-Zimtsäure` of 100 mg in `Säuren` with the note `Kühlschrank`, `CH-0010` `Aspirin` of 1 g in `Säuren` and `CH-0016` `Isopentylacetat` of 100 mg in `Ester`, and a test client requests the list with `q=ZIMT`, with `q=kühl`, with `category=Ester` and with `container=100 mg`
 - **THEN** the lists show `CH-0012`; `CH-0012`; `CH-0016`; and `CH-0016` and `CH-0012`, in the order of their categories; and each filter shows the value requested
 
-#### Scenario: Base columns first
-- **WHEN** a test client requests the list
-- **THEN** each row's cells hold, in this order, the article number, the name, the category, the container and the quantity, then the table view's own columns, and every cell of those is marked as the table view's
-
-#### Scenario: Columns a user may hide
-- **WHEN** a test client requests the list
-- **THEN** the list offers to hide the mean per year, the current year's consumption, the coverage, the compartment, the box, the bulk and the note, and none of the base columns
-
 #### Scenario: The view from the cookie
 - **WHEN** a test client requests the list without a cookie, with the cookie `item-list-view` set to `details`, then to `table`, and then to `other`
 - **THEN** the second answer shows the details view and the others the table view, and no answer's links name a view
@@ -296,7 +285,7 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **THEN** the second answer holds the details of `A-3` alone, as the list with `selected` naming `A-3` shows them; the third redirects to the list with `selected` naming `A-3`
 
 ### Requirement: Delivery list
-`/lab/inventory/deliveries/` SHALL list the delivery notes, under the heading `Endprodukte` (End product layers), newest date first, then newest booking first, each with its number linking to its page, date, recipient, the mark `nachgetragen` (`entered later`) on a historical note and `storniert` (`reversed`) on a reversed one, and its lines with article number, name, size, batch and count; a current note shows `storniert` when all its lines are reversed and `teilweise storniert` (`partly reversed`) when some are. GET parameters filter it and keep their values: `q`, text found regardless of case in the number or recipient, and `item`, an item's id. The list shows its notes in the views `Tabelle` and `Details`, remembered in the cookie `delivery-list-view`, with one note selected by `selected=<id>`, as the item list does with its items: the table view shows each note with its lines; the details view shows beside a table of each note's number, date, recipient, number of lines and a short summary of them the selected note as its page shows it, with its marks, lines and a link to its page. `/lab/inventory/deliveries/<id>/` shows one note with its lines, each with the article number, name, size, batch, linking to its page, compartment, box and count, their movements and the change history, and an unknown id answers 404. A signed-in user sees a link `Neuer Lieferschein` (`New delivery note`).
+`/lab/inventory/deliveries/` SHALL list the delivery notes, under the heading `Endprodukte` (End product layers), newest date first, then newest booking first, each with its number linking to its page, date, recipient and number of lines, the mark `nachgetragen` (`entered later`) on a historical note and `storniert` (`reversed`) on a reversed one; a current note shows `storniert` when all its lines are reversed and `teilweise storniert` (`partly reversed`) when some are. GET parameters filter it and keep their values: `q`, text found regardless of case in the number or recipient, and `item`, an item's id. The list shows its notes in the views `Tabelle` and `Details`, remembered in the cookie `delivery-list-view`, with one note selected by `selected=<id>`, as the item list does with its items: the details view shows the selected note as its page shows it, with its marks, lines and a link to its page. `/lab/inventory/deliveries/<id>/` shows one note with its lines, each with the article number, name, size, batch, linking to its page, compartment, box and count, their movements and the change history, and an unknown id answers 404. A signed-in user sees a link `Neuer Lieferschein` (`New delivery note`).
 
 #### Scenario: Deliveries of one item
 - **WHEN** two notes have lines of an item and a third does not, and a test client requests the list with that item's id
@@ -307,8 +296,8 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **THEN** the line shows `2` and `7` in the columns `Fach` and `Box`
 
 #### Scenario: Lines name their batch
-- **WHEN** a note has a line of 2 containers of the batch `KL0412`, and a test client requests the note's page and the delivery list
-- **THEN** both show `KL0412` in that line, linking on the note's page to the batch's page
+- **WHEN** a note has a line of 2 containers of the batch `KL0412`, and a test client requests the note's page and the delivery list with `selected` naming the note
+- **THEN** the page and the list's details show `KL0412` in that line, linking on the note's page to the batch's page
 
 #### Scenario: A note in the details view
 - **WHEN** a note `LS-2026-156` has lines of `CH-0013` and `CH-0016`, and a test client with the cookie `delivery-list-view` set to `details` requests the delivery list with `selected` naming it
@@ -601,7 +590,7 @@ A flask whose task is ended, failed or cancelled stays at zero: a correction of 
 - **THEN** it lists the stored vessel and then the flask, marked `aufgebraucht`; the filling of 5 linking to the item's page; the item with 3; and the line of 2 of `LS-2026-117`, linking to its page; a line of `KL0412` on a historical note shows `nachgetragen`
 
 ### Requirement: Vessel list
-`/lab/inventory/vessels/` SHALL list the open vessels, of every substance, with the columns `Gefäß`, `Name`, `Artikelnr.`, `Art`, `Charge`, `Herkunft`, `Menge`, `Ort`, `Datum`, `Angebrochen` and `Bemerkung` (`Vessel`, `Name`, `Article no.`, `Kind`, `Batch`, `Source`, `Amount`, `Location`, `Date`, `Opened`, `Note`): `#<id>`, linking to the vessel's page; its substance's name, linking to the substance's page; the article number of the substance's article, empty when there is none; its kind; its batch, linking to the batch's page; the batch's source as the batch list shows it; its amount; its location; its batch's date; for a vessel of a bought batch its `opened_on` or `versiegelt` (`sealed`), and nothing for one of a made batch; and its note. The vessels are ordered by name regardless of case, then by their batch's date, oldest first and vessels without one last, then by id. `empty=1` adds the used-up vessels. `kind=<kind>`, one of `flask`, `end-product`, `intermediate` and `commercial`, lists the vessels of that kind; another value lists every kind. The page offers each kind and shows the one in force. A signed-in user sees a link `Neue Charge` (`New batch`).
+`/lab/inventory/vessels/` SHALL list the open vessels, of every substance, with the columns `Gefäß`, `Name`, `Art`, `Charge`, `Herkunft`, `Menge`, `Ort` and `Datum` (`Vessel`, `Name`, `Kind`, `Batch`, `Source`, `Amount`, `Location`, `Date`): `#<id>`, linking to the vessel's page; its substance's name, linking to the substance's page; its kind; its batch, linking to the batch's page; for a made batch the number of the task that made it, linking to the task's page, and for a bought one its supplier, empty when the batch names neither; its amount; its location; and its batch's date. The vessels are ordered by name regardless of case, then by their batch's date, oldest first and vessels without one last, then by id. `empty=1` adds the used-up vessels. `kind=<kind>`, one of `flask`, `end-product`, `intermediate` and `commercial`, lists the vessels of that kind; another value lists every kind. The page offers each kind and shows the one in force. A signed-in user sees a link `Neue Charge` (`New batch`).
 
 #### Scenario: Used-up vessels
 - **WHEN** the database holds an open vessel and a used-up vessel, and a test client requests the vessel list with and without `empty=1`
@@ -609,7 +598,7 @@ A flask whose task is ended, failed or cancelled stays at zero: a correction of 
 
 #### Scenario: Vessels by kind
 - **WHEN** the database holds an open flask of a made batch of `cinnamic-acid`, an open vessel of a made batch of `acetophenone`, which has no article, and one of a batch of `acetophenone` bought from `Sigma`, and a test client requests the vessel list, and then with `kind=commercial`
-- **THEN** the first lists the three with the kinds `Kolben`, `Zwischenprodukt` and `Handelschemikalie`, the first with `CH-0012` and the others with an empty article number, the last with `gekauft · Sigma`; the second lists the bought vessel alone
+- **THEN** the first lists the three with the kinds `Kolben`, `Zwischenprodukt` and `Handelschemikalie`, the last with the source `Sigma`; the second lists the bought vessel alone
 
 ### Requirement: Vessel page
 `/lab/inventory/vessels/<id>/` SHALL show the vessel as heading; its batch, linking to its page; its substance, linking to its page, and the article number of the substance's article when there is one; its kind, amount, location and note, for a vessel of a bought batch `Angebrochen am <date>` (`Opened on <date>`) or `versiegelt` (`sealed`), and the mark `aufgebraucht` (`used up`) at zero; its movements in booking order, newest first, with date, booking time, kind, amount, amount after, the user's initials, note and, for a filling, the item filled, for a withdrawal, the task and step it went into, linking to the task, for a transfer, the other vessel, linking to its page, and for a reversal the movement it reverses; and its change history. A signed-in user sees the links `Korrigieren` (`Correct`), `Bearbeiten` (`Edit`) and, on an open vessel, `Entnahme` (`Withdraw`) and `Umfüllen` (`Transfer`), and beside each withdrawal not yet reversed a button `Stornieren` (`Reverse`). An unknown id answers 404.

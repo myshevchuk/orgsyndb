@@ -10,6 +10,7 @@ from . import (berlin, frozen, make_group, make_batch, make_item,
 from .collection_support import accept, make_import, make_procedure
 from .demo_support import SeededCase
 from .inventory_support import SUBSTANCE_PAGE
+from .main_lists_support import stacked_controls
 from .registry_support import (REGISTRY, VOCABULARIES, RegistryCase,
                                substance_url, term_url)
 from .structure_support import ETHANOL
@@ -134,6 +135,25 @@ class SearchTests(RegistryCase):
         accept(language="en")
         search = self.get(REGISTRY).find("main").find("input", name="q")
         self.assertIn("Search substances", search.parent.text())
+
+    def test_the_controls_are_inline(self) -> None:
+        form = self.get(REGISTRY).find("form", id="filters")
+        self.assertEqual([s.get("name") for s in form.find_all("select")],
+                         ["group", "class"])
+        self.assertEqual(stacked_controls(form), [])
+
+    def test_the_search_field_names_what_it_searches(self) -> None:
+        search = self.get(REGISTRY).find("form", id="filters").find(
+            "input", name="q")
+        self.assertEqual(search.get("placeholder"),
+                         "Name, Kurzname, Schlüssel oder CAS")
+
+    def test_the_search_placeholder_in_english(self) -> None:
+        accept(language="en")
+        search = self.get(REGISTRY).find("form", id="filters").find(
+            "input", name="q")
+        self.assertEqual(search.get("placeholder"),
+                         "Name, short name, key or CAS")
 
     def test_the_key(self) -> None:
         self.assertEqual(self.found("new-comp"), ["new-compound-7"])

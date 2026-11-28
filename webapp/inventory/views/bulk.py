@@ -81,7 +81,7 @@ BULK_COLUMNS: tuple[SortColumn, ...] = (
                lambda row: sort_value(row.vessel.batch.date)),
     SortColumn("fills", pgettext_lazy("bulk", "Fills"), sortable=False),
 )
-BULK_CLASSES = {"amount": "number"}
+BULK_CLASSES = {"article": "col-strong col-name", "amount": "number col-strong"}
 
 
 def bulk_rows(vessels: list[Vessel]) -> list[BulkRow]:

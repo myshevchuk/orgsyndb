@@ -20,19 +20,13 @@ from .test_inventory_colours import (CSS, MINIMUM, balanced, contrast,
                                      split_schemes)
 
 SORTS = ("number", "name", "category", "container", "stock", "mean_year",
-         "this_year", "coverage", "compartment", "box", "bulk", "note")
+         "this_year", "coverage", "compartment", "box", "bulk")
 COLUMNS = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
            "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
-           "Bulk verfügbar", "Bemerkung"]
+           "Bulk"]
 KEYS = ["number", "name", "category", "container", "stock", "mean_year",
-        "this_year", "coverage", "compartment", "box", "bulk", "note"]
+        "this_year", "coverage", "compartment", "box", "bulk"]
 SORTED_COLUMNS = dict(zip(KEYS, COLUMNS))
-# The base columns, which both views show and no user can hide, and the
-# table view's own columns, which a user may hide.
-BASE = KEYS[:5]
-TABLE_VIEW = KEYS[5:]
-# The columns hidden at first.
-HIDDEN = {"note"}
 COOKIE = "item-list-view"
 LEVEL_VALUES = ["out", "critical", "low", "watch", "ok", "undelivered",
                 "dormant"]
@@ -136,7 +130,8 @@ class ColumnTests(TableCase):
         header, _ = table(root)
         self.assertEqual(header, [
             "Article no.", "Name", "Category", "Container", "Stock",
-            "Mean per year", "Delivered", "Coverage", "Compartment", "Box", "Bulk available", "Note"])
+            "Mean per year", "Delivered", "Coverage", "Compartment", "Box",
+            "Bulk"])
         units = [th.find("small").text()
                  for th in self.headers(root).values() if th.find("small")]
         self.assertEqual(units, ["containers", "containers / year",
@@ -155,35 +150,44 @@ class ColumnTests(TableCase):
                 for key, cell in zip(KEYS, cells):
                     self.assertIn(f"col-{key}", cell.classes)
 
-    def test_the_base_columns_come_first(self) -> None:
-        """Scenario: Base columns first."""
+    def test_both_views_show_every_column_in_order(self) -> None:
+        """Requirement: Item list (both views show every column)."""
         self.means_item("T-1", note="Notiz")
-        root = self.listing()
-        header, rows = table(root)
-        self.assertEqual(header[:5], ["Artikelnr.", "Name", "Kategorie",
-                                      "Gebinde", "Bestand"])
-        self.assertEqual(header[5:], ["Ø Jahr", "Abgegeben", "Reichweite",
-                                      "Fach", "Box", "Bulk verfügbar",
-                                      "Bemerkung"])
-        cells = [c for c in root.find("tbody").find("tr").children
-                 if not isinstance(c, str) and c.tag == "td"]
-        self.assertEqual([[n[4:] for n in c.classes
-                           if n.startswith("col-")][0] for c in cells],
-                         KEYS)
+        for view in (None, "table", "details"):
+            with self.subTest(view=view):
+                root = self.listing(view=view)
+                header, rows = table(root)
+                self.assertEqual(header, COLUMNS)
+                self.assertNotIn("Bemerkung", header)
+                cells = [c for c in root.find("tbody").find("tr").children
+                         if not isinstance(c, str) and c.tag == "td"]
+                self.assertEqual([[n[4:] for n in c.classes
+                                   if n.startswith("col-")
+                                   and n != "col-strong"][0]
+                                  for c in cells], KEYS)
 
-    def test_the_table_views_cells_are_marked_as_its_own(self) -> None:
-        """Scenario: Base columns first (the marks)."""
+    def test_no_cell_or_header_is_the_table_views_own(self) -> None:
         self.item("T-1")
         self.item(None, "Ohne Nummer")
-        grid = self.listing().find("table")
-        for tr in [tr for tr in grid.find_all("tr")
-                   if tr.closest("table") is grid]:
-            cells = [c for c in tr.children
-                     if not isinstance(c, str) and c.tag in ("th", "td")]
-            for key, cell in zip(KEYS, cells):
-                with self.subTest(row=tr.text()[:30], column=key):
-                    self.assertEqual("table-only" in cell.classes,
-                                     key in TABLE_VIEW)
+        for view in (None, "table", "details"):
+            root = self.listing(view=view)
+            grid = root.find("table")
+            for tr in [tr for tr in grid.find_all("tr")
+                       if tr.closest("table") is grid]:
+                for cell in tr.children:
+                    if isinstance(cell, str) or cell.tag not in ("th", "td"):
+                        continue
+                    with self.subTest(view=view, row=tr.text()[:30]):
+                        self.assertNotIn("table-only", cell.classes)
+            self.assertEqual([e.tag for e in root.walk()
+                              if "table-only" in e.classes], [])
+
+    def test_no_note_cell_holds_an_items_note(self) -> None:
+        self.means_item("T-1", note="Notiz im Bestand")
+        root = self.listing()
+        self.assertNotIn("Notiz im Bestand", root.find("tbody").text())
+        self.assertEqual([e.tag for e in root.walk()
+                          if "col-note" in e.classes], [])
 
     def test_the_heading_counts_the_inventory(self) -> None:
         self.item("T-1", category="A")
@@ -278,7 +282,7 @@ class SortTests(TableCase):
                 ("?sort=stock&dir=desc",
                  "Bestand absteigend, Artikelnr., Gebinde aufsteigend"),
                 ("?sort=bulk",
-                 "Bulk verfügbar, Artikelnr., Gebinde aufsteigend")):
+                 "Bulk, Artikelnr., Gebinde aufsteigend")):
             with self.subTest(query=query):
                 self.assertEqual(self.summary(self.listing(query)),
                                  f"1 von 1 Artikel · {order}")
@@ -342,12 +346,13 @@ class SortTests(TableCase):
             "Zeta 10 µmol"])
 
     def test_text_regardless_of_case(self) -> None:
-        self.item("T-1", name="beta", note="Zwei")
-        self.item("T-2", name="Alpha", note="eins")
+        self.item("T-1", name="beta", category="Zwei")
+        self.item("T-2", name="Alpha", category="eins")
         self.item("T-3", name="Gamma")
         self.assertEqual(self.articles("?sort=name"), ["T-2", "T-1", "T-3"])
-        self.assertEqual(self.articles("?sort=note"), ["T-2", "T-1", "T-3"])
-        self.assertEqual(self.articles("?sort=note&dir=desc"),
+        self.assertEqual(self.articles("?sort=category"),
+                         ["T-2", "T-1", "T-3"])
+        self.assertEqual(self.articles("?sort=category&dir=desc"),
                          ["T-1", "T-2", "T-3"])
 
     def test_locations_regardless_of_case_and_empty_last(self) -> None:
@@ -394,16 +399,27 @@ class SortTests(TableCase):
         self.assertEqual(self.articles("?sort=stock&dir=desc"),
                          ["A-2", "A-1", "A-4", "A-5", "A-3"])
 
-    def test_bulk_by_the_containers_it_fills(self) -> None:
+    def test_bulk_by_its_amount(self) -> None:
+        """Masses by mg, then amounts of substance by µmol, items
+        without bulk last, whatever the number of containers the bulk
+        fills: here the order by amount is the reverse of the order by
+        fill count."""
         self.item("CH-0001", size="10", unit="mg")
-        self.item("CH-0002", size="10", unit="mg")
-        self.item("CH-0010", size="10", unit="mg")
+        self.item("CH-0002", size="1", unit="mg")
+        self.item("CH-0003", size="10", unit="umol")
+        self.item("CH-0004", size="10", unit="mg")
+        self.item("CH-0005", size="10", unit="mg")
         self.vessel("CH-0001", "mg", "50")
-        self.vessel("CH-0002", "mg", "5")
+        self.vessel("CH-0002", "mg", "20")
+        self.vessel("CH-0003", "umol", "5")
+        self.vessel("CH-0004", "g", "1")
+        self.vessel("CH-0004", "umol", "3")
         self.assertEqual(self.articles("?sort=bulk"),
-                         ["CH-0002", "CH-0001", "CH-0010"])
+                         ["CH-0002", "CH-0001", "CH-0004", "CH-0003",
+                          "CH-0005"])
         self.assertEqual(self.articles("?sort=bulk&dir=desc"),
-                         ["CH-0001", "CH-0002", "CH-0010"])
+                         ["CH-0003", "CH-0004", "CH-0001", "CH-0002",
+                          "CH-0005"])
 
     def test_ties_keep_the_default_order(self) -> None:
         for article in ("E-2", "E-3", "E-1"):
@@ -422,7 +438,7 @@ class SortTests(TableCase):
         self.assertEqual(self.header_link(root, "Name"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["name"]})
-        self.assertEqual(self.header_link(root, "Bulk verfügbar"), {
+        self.assertEqual(self.header_link(root, "Bulk"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["bulk"]})
 
@@ -432,7 +448,7 @@ class SortTests(TableCase):
         second = self.item("K-2", category="Grün")
         root = self.listing(f"?category={quote('Grün')}&q=k"
                             f"&sort=name&dir=desc&selected={second.pk}")
-        for column in ("Name", "Bulk verfügbar"):
+        for column in ("Name", "Bulk"):
             with self.subTest(column=column):
                 link = self.header_link(root, column)
                 self.assertEqual(link.get("selected"), [str(second.pk)])
@@ -739,6 +755,8 @@ class StockMenuTests(TableCase):
         self.assertIn("Bestandsstatus", note)
         self.assertIn("Details", note)
         self.assertIsNone(re.search(r"\bOrt\b", note), note)
+        for name in ("Fach", "Box", "Bulk"):
+            self.assertNotIn(name, note)
 
 
 class PopupTests(TableCase):
@@ -764,74 +782,34 @@ class PopupTests(TableCase):
         root = self.listing()
         self.assertEqual(sorted(e.get("id") for e in root.walk()
                                 if "popover" in e.attrs),
-                         ["columns-menu", "more-filters", "stock-menu"])
+                         ["more-filters", "stock-menu"])
 
 
 class ViewControlTests(TableCase):
 
-    def test_view_controls(self) -> None:
-        """Scenario: Columns a user may hide, View controls."""
-        self.item("V-1")
-        root = self.listing()
-        columns = root.find(id="columns-menu")
-        self.assertIn("popover", columns.attrs)
-        self.assertIsNotNone(root.find("button", attrs={
-            "popovertarget": "columns-menu"}))
-        boxes = columns.find_all("input", type="checkbox")
-        self.assertEqual([box.get("id") for box in boxes],
-                         [f"column-{key}" for key in TABLE_VIEW])
-        self.assertEqual({box.get("id")[7:] for box in boxes
-                          if "checked" not in box.attrs}, HIDDEN)
-        labels = {box.get("id")[7:]: box.parent.text() for box in boxes}
-        self.assertEqual(labels["compartment"], "Fach")
-        self.assertEqual(labels["box"], "Box")
-        self.assertEqual(labels["note"], "Bemerkung")
-        self.assertNotIn("location", labels)
-        height = root.find("select", id="row-height")
-        self.assertEqual([(o.get("value"), o.text(), "selected" in o.attrs)
-                          for o in height.find_all("option")],
-                         [("compact", "Kompakt", True),
-                          ("tight", "Sehr kompakt", False)])
-        heat = root.find("input", id="heat-switch")
-        self.assertEqual(heat.get("type"), "checkbox")
-        self.assertIn("checked", heat.attrs)
-        self.assertIn("Verbrauch einfärben", heat.parent.text())
-        controls = [*boxes, height, heat]
-        for control in controls:
-            with self.subTest(control=control.get("id")):
-                self.assertTrue(control.get("data-remember"))
-                self.assertIsNone(control.closest("form"))
-                self.assertIsNone(control.get("form"))
-                self.assertIsNone(control.get("name"))
-        remembered = [c.get("data-remember") for c in controls]
-        self.assertEqual(len(set(remembered)), len(remembered))
-
-    def test_the_menu_offers_no_base_column(self) -> None:
-        """Scenario: Columns a user may hide."""
+    def test_the_removed_controls_are_gone(self) -> None:
+        """Requirement: Item list (no menu hides a column or sets the
+        row height or the heat)."""
         self.item("V-1")
         for view in (None, "table", "details"):
             with self.subTest(view=view):
-                boxes = self.listing(view=view).find(
-                    id="columns-menu").find_all("input", type="checkbox")
-                offered = {box.get("id") for box in boxes}
-                self.assertEqual(offered,
-                                 {f"column-{key}" for key in TABLE_VIEW})
-                for key in BASE:
-                    self.assertNotIn(f"column-{key}", offered)
-
-    def test_the_columns_shown_at_first(self) -> None:
-        """Item list: Fach and Box show at first, Bemerkung does not."""
-        self.item("V-1")
-        boxes = self.listing().find(id="columns-menu").find_all(
-            "input", type="checkbox")
-        shown = {box.get("id")[7:]: "checked" in box.attrs
-                 for box in boxes}
-        self.assertEqual(set(shown), set(TABLE_VIEW))
-        self.assertTrue(shown["compartment"])
-        self.assertTrue(shown["box"])
-        self.assertFalse(shown["note"])
-        self.assertEqual({key for key, on in shown.items() if not on},
-                         {"note"})
+                root = self.listing(view=view)
+                self.assertIsNone(root.find(id="columns-menu"))
+                self.assertIsNone(root.find("button", attrs={
+                    "popovertarget": "columns-menu"}))
+                self.assertEqual([e.get("id") for e in root.walk()
+                                  if e.get("id", "").startswith("column-")],
+                                 [])
+                self.assertNotIn("Spalten", [b.text() for b in
+                                             root.find_all("button")])
+                self.assertIsNone(root.find(cls="lab-columns"))
+                self.assertIsNone(root.find("details", cls="lab-view-menu"))
+                self.assertIsNone(root.find(cls="lab-view-controls"))
+                self.assertIsNone(root.find(id="row-height"))
+                self.assertIsNone(root.find(id="heat-switch"))
+                self.assertIsNone(root.find(cls="heat-legend"))
+                self.assertEqual([e.tag for e in root.walk()
+                                  if "data-remember" in e.attrs], [])
 
     def test_the_old_switch_is_gone(self) -> None:
         item = self.item("V-1")
@@ -962,43 +940,17 @@ class ViewTests(TableCase):
 
 
 class GeneratedRuleTests(TableCase):
-    """The rules that hide the table view's columns: the page's head
-    holds them, one per column, and the stylesheet none."""
+    """The page's head holds no rule that hides a column."""
 
-    def style(self, root) -> str:
-        found = [e for e in root.find("head").find_all("style")
-                 if "#column-" in e.text()]
-        self.assertEqual(len(found), 1, "the head holds no such <style>")
-        return found[0].text()
-
-    def test_the_head_holds_one_rule_per_table_view_column(self) -> None:
+    def test_the_head_holds_no_rule_per_column(self) -> None:
         self.item("G-1")
-        text = self.style(self.listing())
-        found = [(part.strip(), body) for selector, body in rules(text)
-                 for part in selector.split(",")]
-        self.assertEqual(
-            sorted(part for part, _ in found),
-            sorted(f"main:has(#column-{key}:not(:checked)) "
-                   f".main-table .col-{key}" for key in TABLE_VIEW))
-        for part, body in found:
-            with self.subTest(rule=part):
-                self.assertRegex(body, r"display:\s*none")
-
-    def test_no_rule_names_a_base_column(self) -> None:
-        self.item("G-1")
-        text = self.style(self.listing())
-        for key in BASE:
-            with self.subTest(column=key):
-                self.assertNotIn(f"#column-{key}", text)
-                self.assertNotIn(f".col-{key}", text)
-
-    def test_the_rules_are_the_same_in_both_views(self) -> None:
-        self.item("G-1")
-        wanted = self.style(self.listing())
-        for cookie in ("details", "table"):
-            with self.subTest(cookie=cookie):
-                self.assertEqual(self.style(self.listing(view=cookie)),
-                                 wanted)
+        for view in (None, "details", "table"):
+            with self.subTest(view=view):
+                root = self.listing(view=view)
+                self.assertEqual(
+                    [e.text() for e in root.find("head").find_all("style")
+                     if "#column-" in e.text() or ".col-" in e.text()],
+                    [])
 
 
 class SelectionKeptTests(TableCase):
@@ -1139,24 +1091,43 @@ class HeatTests(TableCase):
         header, rows = table(self.listing())
         self.assertEqual(heat_of(rows[0]["Abgegeben"]), "heat-1")
 
-    def test_the_switch_shows_the_scale(self) -> None:
+    def test_the_hint_line_shows_the_scale(self) -> None:
         self.item("S-1")
-        root = self.listing()
-        scale = root.find(cls="heat-legend")
-        self.assertIsNotNone(scale)
-        self.assertEqual([heat_of(e) for e in scale.walk()
-                          if heat_of(e)], HEATS)
-        text = scale.text()
-        self.assertLess(text.index("wenig"), text.index("viel"))
-        self.assertIsNotNone(scale.find("input", id="heat-switch"))
+        for view in (None, "details"):
+            with self.subTest(view=view):
+                root = self.listing(view=view)
+                notes = root.find_all(cls="lab-table-note")
+                self.assertEqual(len(notes), 1)
+                note = notes[0]
+                swatches = [e for e in note.walk() if heat_of(e)]
+                self.assertEqual([heat_of(e) for e in swatches], HEATS)
+                text = note.text()
+                self.assertLess(text.index("wenig"), text.index("viel"))
+                self.assertLess(text.index("Bestand"), text.index("wenig"))
+                self.assertEqual(
+                    [e for e in root.walk() if heat_of(e)
+                     and e.closest("table") is None
+                     and e not in swatches], [])
 
     def test_the_english_scale(self) -> None:
         accept(language="en")
         self.item("S-1")
-        scale = self.listing().find(cls="heat-legend")
-        text = scale.text()
-        self.assertIn("Colour consumption", text)
+        note = self.listing().find(cls="lab-table-note")
+        self.assertEqual([heat_of(e) for e in note.walk() if heat_of(e)],
+                         HEATS)
+        text = note.text()
         self.assertLess(text.index("little"), text.index("much"))
+        self.assertNotIn("Colour consumption", text)
+
+    def test_the_heat_is_always_on_its_cells(self) -> None:
+        item = self.item("H-1")
+        self.enter(item, 2026, 1, 3)
+        self.with_mean_quarter(self.item("H-2"), 2)
+        header, rows = table(self.listing())
+        for column in ("Ø Jahr", "Abgegeben"):
+            with self.subTest(column=column):
+                self.assertTrue(
+                    any(heat_of(row[column]) for row in rows))
 
 
 class StickyTests(TableCase):
@@ -1235,9 +1206,43 @@ class StylesheetTests(SimpleTestCase):
             printed += balanced(self.text, found.start())[0]
         hidden = " ".join(selector for selector, body in rules(printed)
                           if re.search(r"display:\s*none", body))
-        for part in (".lab-toolbar", ".lab-view-controls",
-                     ".lab-table-note"):
+        for part in (".lab-toolbar", ".lab-table-note"):
             self.assertIn(part, hidden)
+
+    def test_no_rule_serves_a_removed_control_or_mark(self) -> None:
+        names = ("#row-height", "#heat-switch", ".lab-view-menu",
+                 ".lab-view-controls", ".heat-legend", ".table-only",
+                 ".lab-columns", "#columns-menu", ".projected",
+                 ".col-note", ".col-fill")
+        for _, selector, _ in located(self.text):
+            for name in names:
+                with self.subTest(selector=selector, name=name):
+                    self.assertIsNone(re.search(
+                        re.escape(name) + r"(?![\w-])", selector))
+            with self.subTest(selector=selector):
+                self.assertNotIn(".category-table td:first-child",
+                                 selector)
+
+    def test_one_rule_makes_the_strong_columns_bold(self) -> None:
+        bold = [body for _, selector, body in located(self.text)
+                for part in selector.split(",")
+                if " ".join(part.split()) == ".main-table td.col-strong"
+                and re.search(r"font-weight:\s*(600|700|bold)\b", body)]
+        self.assertEqual(len(bold), 1, bold)
+
+    def test_the_name_caps_are_for_the_screen_alone(self) -> None:
+        spans = screen_blocks(blanked(self.text))
+        capped = [(start, selector)
+                  for start, selector, body in located(self.text)
+                  if re.search(r"text-overflow:\s*ellipsis", body)
+                  and re.search(r"(?<![-\w])max-width:", body)
+                  and re.search(r"overflow:\s*hidden", body)
+                  and re.search(r"\.main-table|td|col-", selector)
+                  and "note-lines" not in selector]
+        self.assertTrue(capped, "no rule caps the width of a name")
+        for place, selector in capped:
+            with self.subTest(selector=selector):
+                self.assertTrue(any(a <= place < b for a, b in spans))
 
     def test_the_stylesheet_holds_no_rule_per_column(self) -> None:
         """The rules that hide a column of ``Spalten`` come with the
@@ -1245,20 +1250,6 @@ class StylesheetTests(SimpleTestCase):
         for selector, _ in rules(self.text):
             with self.subTest(selector=selector):
                 self.assertNotIn("#column-", selector)
-
-    def test_the_switch_drops_the_heat(self) -> None:
-        found = rules(self.text)
-        dropped = [body for selector, body in found
-                   if "#heat-switch:not(:checked)" in selector]
-        self.assertTrue(dropped)
-        self.assertTrue(any(re.search(r"background(-color)?:\s*"
-                                      r"(none|transparent)", body)
-                            for body in dropped))
-
-    def test_the_tight_rows(self) -> None:
-        self.assertTrue(any('#row-height option[value="tight"]:checked'
-                            in selector for selector, _ in
-                            rules(self.text)))
 
     def heat_tokens(self, text: str) -> dict[str, str]:
         tokens = {}
@@ -1315,27 +1306,6 @@ class StylesheetTests(SimpleTestCase):
                 if needle in part
                 and re.search(r"display:\s*none", body)]
 
-    def test_the_details_view_hides_the_table_views_columns(self) -> None:
-        """Item list: while the details view shows, the table keeps the
-        base columns."""
-        scripted = [part for _, part, _ in self.hiding(".table-only")
-                    if re.search(r"\[data-view=[\"']?details[\"']?\]", part)
-                    and "[data-scripted]" in part
-                    and ":not([data-scripted])" not in part]
-        self.assertTrue(scripted, "no rule hides .table-only by data-view")
-        plain = [part for _, part, _ in self.hiding(".table-only")
-                 if "#view-details:checked" in part
-                 and ":not([data-scripted])" in part]
-        self.assertTrue(plain, "no rule hides .table-only by the radio")
-
-    def test_the_table_views_columns_hide_on_screen_alone(self) -> None:
-        spans = screen_blocks(blanked(self.text))
-        found = self.hiding(".table-only")
-        self.assertTrue(found)
-        for place, part, _ in found:
-            with self.subTest(selector=part):
-                self.assertTrue(any(a <= place < b for a, b in spans))
-
     def test_the_views_do_not_depend_on_the_old_switch(self) -> None:
         for _, selector, _ in located(self.text):
             with self.subTest(selector=selector):
@@ -1364,9 +1334,8 @@ class StylesheetTests(SimpleTestCase):
             and ":not([data-scripted])" in part for part, _ in shown),
             shown)
 
-    def test_the_table_takes_its_natural_width(self) -> None:
-        """Item list: a base column is as wide in one view as in the
-        other, so the table does not stretch to its box."""
+    def test_the_table_fills_its_box(self) -> None:
+        """The table stretches to the width of its box."""
         ours = (".main-table", "table.main-table")
         widths = [(start, part.strip(), width.strip())
                   for start, selector, body in located(self.text)
@@ -1376,7 +1345,7 @@ class StylesheetTests(SimpleTestCase):
                   if part.strip() in ours]
         self.assertTrue(widths, "no rule sets the width of .main-table")
         start, part, width = widths[-1]
-        self.assertEqual(width, "auto")
+        self.assertEqual(width, "100%")
 
     def test_the_marked_row_is_marked_in_both_views(self) -> None:
         marks = [(part.strip(), body)

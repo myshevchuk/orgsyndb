@@ -56,7 +56,11 @@ BATCH_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("stock", gettext_lazy("Stock"),
                lambda row: pairs_sort_key(row[1])),
 )
-BATCH_CLASSES = {"yield": "number", "stock": "number"}
+BATCH_CLASSES = {
+    "name": "col-strong col-name",
+    "yield": "number",
+    "stock": "number col-strong",
+}
 
 
 def _batch_detail_context(batch: Batch) -> dict[str, Any]:

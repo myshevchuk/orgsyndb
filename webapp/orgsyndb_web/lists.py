@@ -332,11 +332,19 @@ def totals_data_sort(totals: Mapping[str, Decimal]) -> str:
 
 
 def pairs_sort_key(pairs: Sequence[tuple[Decimal, str]]) -> Any:
-    """Return a ``sort_value`` key for ``(amount, unit)`` PAIRS."""
+    """Return a ``sort_value`` key for ``(amount, unit)`` PAIRS: as
+    ``totals_sort_key`` gives it for the totals per unit, and, for pairs
+    whose totals are all zero, the key of a zero mass, or of a zero
+    amount of substance when no pair is a mass. Returns None for no
+    pairs."""
     totals: dict[str, Decimal] = {}
     for amount, unit in pairs:
         totals[unit] = totals.get(unit, Decimal(0)) + amount
-    return totals_sort_key(totals)
+    key = totals_sort_key(totals)
+    if key is not None or not totals:
+        return key
+    return (0, 1 if any(unit in _MASS_FACTORS for unit in totals) else 2,
+            Decimal(0))
 
 
 def pairs_data_sort(pairs: Sequence[tuple[Decimal, str]]) -> str:

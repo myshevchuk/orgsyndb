@@ -305,9 +305,8 @@
 .level-ok { background: var(--level-ok-bg); color: var(--level-ok-fg); }
 .level-undelivered { background: var(--level-undelivered-bg); color: var(--level-undelivered-fg); }
 .level-dormant { background: var(--level-dormant-bg); color: var(--level-dormant-fg); }
-/* An item that entered stock this year, and figures projected from it. */
+/* An item that entered stock this year. */
 .mark-new { color: var(--link); font-family: var(--font-ui); font-size: 0.7em; font-weight: 600; margin-left: 0.15em; }
-.projected { font-style: italic; }
 .stock { font-weight: 600; }
 span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem; }
 .level-label { font-weight: 400; font-size: 0.875em; }
@@ -332,7 +331,7 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
    and key-value tables via .kv-table). One sort-indicator style covers
    both server header links and client button.sort-header. */
 .main-table {
-  width: auto;
+  width: 100%;
   font-size: 0.8125rem;
 }
 .main-table thead { background: var(--surface); }
@@ -360,10 +359,14 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .main-table .muted { color: var(--muted); }
 .main-table td a { text-decoration: none; }
 .main-table td a:hover { text-decoration: underline; }
-.main-table .col-fill,
-.main-table .col-note { width: 100%; }
-.main-table td.col-fill,
-.main-table td.col-note { white-space: normal; min-width: 12rem; }
+.main-table td.col-strong { font-weight: 600; }
+.main-table .article-number {
+  font-family: var(--font-mono);
+  font-size: 0.71875rem;
+  font-weight: 400;
+  color: var(--muted);
+  margin-right: 0.3rem;
+}
 .main-table .badge {
   font-size: 0.6875rem;
   line-height: 1.35;
@@ -491,6 +494,7 @@ th[aria-sort="descending"] > :is(a, button.sort-header)::after {
    toolbar, view menu, compact item table and the note below it. The
    details of one item and the fixed-height screen frame have their own
    rules further down. */
+body.lab-frame { max-width: none; }
 .lab-count { color: var(--muted); font-family: var(--font-ui); }
 .lab-frame .lab-heading {
   flex: none;
@@ -658,8 +662,7 @@ th[aria-sort="descending"] > :is(a, button.sort-header)::after {
   outline: 0;
 }
 .lab-toolbar input[type="search"],
-.lab-toolbar button,
-.lab-toolbar summary.lab-menu-button {
+.lab-toolbar button {
   font: inherit;
   line-height: 1.25;
   height: 1.85rem;
@@ -725,63 +728,6 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 }
 .lab-toolbar .lab-text-button:hover { text-decoration: underline; }
 
-details.lab-view-menu { position: relative; display: inline-block; }
-details.lab-view-menu > summary.lab-menu-button {
-  list-style: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-}
-details.lab-view-menu > summary.lab-menu-button::-webkit-details-marker { display: none; }
-details.lab-view-menu[open] > summary.lab-menu-button {
-  outline: 2px solid var(--link);
-  outline-offset: 2px;
-}
-.lab-view-controls {
-  position: absolute;
-  top: calc(100% + 0.35rem);
-  right: 0;
-  z-index: 20;
-  min-width: 17.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.65rem;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--muted);
-  border-radius: 0.25rem;
-  box-shadow: 0 6px 22px rgb(0 0 0 / 0.18);
-  font-size: 0.875rem;
-  white-space: normal;
-}
-.lab-view-controls > label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-}
-.lab-view-controls select {
-  font: inherit;
-  color: var(--fg);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 0.2rem;
-  padding: 0.25rem 0.45rem;
-}
-.heat-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin: 0;
-}
-.heat-legend label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-}
-.heat-legend input { margin: 0; }
 /* The switch between the two views: a compact segmented control of two
    radio buttons, which are hidden but keep their native behaviour; the
    label of the checked one is filled. */
@@ -820,17 +766,6 @@ details.lab-view-menu[open] > summary.lab-menu-button {
   color: var(--muted);
 }
 
-.bulk-table .article-number {
-  font-family: var(--font-mono);
-  font-size: 0.71875rem;
-  color: var(--muted);
-  margin-right: 0.3rem;
-}
-.bulk-table td:first-child a,
-.category-table td:first-child a { font-weight: 600; }
-/* Long substance names wrap rather than push the last columns out of
-   the table's box. */
-.category-table td:first-child { white-space: normal; min-width: 14rem; }
 .cat-meta { color: var(--muted); font-size: 0.75rem; }
 .cat-cas { font-family: var(--font-mono); font-size: 0.71875rem; }
 .cat-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -947,14 +882,6 @@ details.lab-view-menu[open] > summary.lab-menu-button {
 .lab-table-note strong { color: var(--fg); font-weight: 600; }
 .lab-frame .lab-table-note { flex: none; margin: 0.35rem 0 0; font-size: 0.75rem; line-height: 1.35; }
 
-/* The view controls work through these rules alone: an unchecked box of
-   `Spalten` hides its column through a rule the page itself brings,
-   `Sehr kompakt` tightens the rows, and an unchecked `Verbrauch
-   einfärben` drops the heat. lab.js only keeps their state. */
-main:has(#row-height option[value="tight"]:checked) .main-table { font-size: 0.75rem; }
-main:has(#row-height option[value="tight"]:checked) .main-table :is(th, td) { height: 1.75rem; padding: 0.1rem 0.45rem; }
-main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background: none; color: inherit; }
-
 /* Menus that open as popups. Browsers with full CSS Anchor Positioning
    place each popup against its trigger button and flip or clamp to the
    viewport; older browsers fall back to lab.js marking data-placed and
@@ -1008,15 +935,9 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
   #stock-menu { position-anchor: --stock-menu-anchor; }
   [popovertarget="more-filters"] { anchor-name: --more-filters-anchor; }
   #more-filters { position-anchor: --more-filters-anchor; }
-  [popovertarget="columns-menu"] { anchor-name: --columns-menu-anchor; }
-  #columns-menu { position-anchor: --columns-menu-anchor; }
 }
 .lab-menu { padding: var(--space-2) var(--space-3); }
 .lab-menu > label { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-2); }
-.lab-menu fieldset { margin: 0; padding: 0; border: 0; }
-.lab-menu legend { padding: 0; margin: 0 0 var(--space-1); font-weight: 600; }
-.lab-menu fieldset label { display: flex; align-items: center; gap: var(--space-2); padding: 0.1rem 0; }
-.lab-menu fieldset input { margin: 0; }
 
 .stock-menu { width: min(23rem, calc(100vw - 2rem)); padding: var(--space-1); }
 .stock-menu ul { list-style: none; margin: 0; padding: 0; }
@@ -1099,7 +1020,7 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
    stay hidden, as `#item-detail` above leaves them. Collapsible widgets
    print open, and sort header buttons print so column headers stay. */
 @media print {
-  .lab-toolbar, .lab-view-controls, .lab-table-note, .lab-heading .actions,
+  .lab-toolbar, .lab-table-note, .lab-heading .actions,
   .lab-pick, .main-table input[name="item"], [popover] { display: none; }
   details.widget::details-content { content-visibility: visible; }
   th > button.sort-header {
@@ -1111,17 +1032,18 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
     font: inherit;
   }
   th > button.sort-header::after { content: none; }
+  .main-table th:not(.num):not(.number),
+  .main-table td:not(.num):not(.number) { white-space: normal; }
 }
 
 /* On screen, the item list's box scrolls both ways, at most the window's
    height, and keeps the header rows at its top and the first column at
    its left. The row of the selected item is marked and a click chooses
-   a row, in both views. The details view drops the table view's columns
-   and shows the selected item's details beside the table, below it in a
-   narrow window. lab.js marks the layout data-scripted and keeps its
-   data-view; until then, and without the script, the layout follows the
-   radio buttons of the switch. Paper keeps print.css's whole table
-   without the details. */
+   a row, in both views. The details view shows the selected item's
+   details beside the table, below it in a narrow window. lab.js marks
+   the layout data-scripted and keeps its data-view; until then, and
+   without the script, the layout follows the radio buttons of the
+   switch. Paper keeps print.css's whole table without the details. */
 @media screen {
   .table-scroll.table-sticky { overflow: auto; max-height: calc(100vh - 4rem); }
   .table-sticky thead { position: sticky; top: 0; z-index: 2; }
@@ -1129,6 +1051,12 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
   .table-sticky :is(th, td):first-child { position: sticky; left: 0; }
   .table-sticky tbody td:first-child { z-index: 1; background: var(--bg); }
   .table-sticky thead :is(th, td):first-child { z-index: 3; }
+
+  .main-table td.col-name {
+    max-width: 22rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .main-table tbody tr[data-item] { cursor: pointer; }
   .main-table tbody tr[aria-current="true"] > td:not(.stock, [class*="heat-"]) {
@@ -1140,11 +1068,6 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
     outline-offset: -2px;
   }
 
-  /* Without the script nothing disables `Spalten`, whose columns the
-     details view does not show. */
-  main:has(#view-details:checked):not(:has(.item-layout[data-scripted])) .lab-columns { visibility: hidden; }
-  .item-layout[data-scripted][data-view="details"] .table-only,
-  main:has(#view-details:checked) .item-layout:not([data-scripted]) .table-only { display: none; }
   .item-layout[data-scripted][data-view="details"],
   main:has(#view-details:checked) .item-layout:not([data-scripted]) {
     display: grid;
@@ -1291,28 +1214,6 @@ main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background
       body.lab-frame main:has(#view-details:checked) .item-layout:not(.item-layout--split):not([data-scripted]) {
         grid-template-columns: fit-content(calc(100% - 25rem - 0.75rem)) minmax(25rem, 1fr);
       }
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines {
-      display: block;
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      max-width: 16rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--muted);
-      font-size: 0.75rem;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines li,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines li {
-      display: inline;
-      margin: 0;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines li + li::before,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines li + li::before {
-      content: ", ";
     }
   }
 

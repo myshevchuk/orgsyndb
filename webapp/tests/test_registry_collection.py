@@ -197,7 +197,8 @@ class FilterTests(TestCase):
 
     def test_the_choices(self) -> None:
         form = page(self.client.get(REGISTRY)).find("main").find("form")
-        labels = {select.get("name"): select.parent.text().split()[0]
+        labels = {select.get("name"):
+                  select.parent.text().split()[0].rstrip(":")
                   for select in form.find_all("select")}
         self.assertEqual(labels, {"group": "Bestandsgruppe",
                                   "class": "Stoffklasse"})

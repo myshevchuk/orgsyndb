@@ -996,3 +996,27 @@ class ScriptSourceTests(TestCase):
     def test_a_click_on_any_control_of_a_row_selects_nothing(self) -> None:
         self.assertIn("a, button, label, input, select, textarea",
                       self.text)
+
+    def test_it_registers_neither_view_menu_nor_remember(self) -> None:
+        self.assertNotRegex(
+            self.text, r"register\(\s*[\"'](view-menu|remember)[\"']")
+        for name in ("ViewMenuController", "RememberController"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.text)
+
+    def test_it_registers_the_controllers_that_stay(self) -> None:
+        for name in ("popover-anchor", "batch-narrow", "sortable-table",
+                     "split-list", "dialog"):
+            with self.subTest(name=name):
+                self.assertRegex(
+                    self.text, rf"register\(\s*[\"']{name}[\"']")
+
+    def test_it_holds_no_storage_helper(self) -> None:
+        self.assertNotRegex(self.text, r"\bstorage\b")
+        self.assertNotIn("localStorage", self.text)
+
+    def test_it_names_no_removed_control(self) -> None:
+        for name in ("lab-view-menu", "columns-menu", "data-remember",
+                     "view-menu", "_columnsButton"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.text)

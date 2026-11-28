@@ -19,13 +19,13 @@
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for batch, stock in rows %}<tr data-item="{{ batch.pk }}" hx-get="/lab/inventory/batches/{{ batch.pk }}/detail/" hx-trigger="item-select"{% if batch == detail_batch %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
-<td>{% substance batch.substance %}</td>
+<td class="col-strong col-name" title="{{ batch.substance.shown_name }}">{% substance batch.substance %}</td>
 <td>{{ batch.article_number|default_if_none:"" }}</td>
 <td>{% include "inventory/batch_source.html" %}</td>
 <td>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% endif %}</td>
 <td>{{ batch.date|default_if_none:"" }}</td>
 <td class="number">{{ batch|in_yield_unit }}</td>
-<td class="number">{% for amount, unit in stock %}{{ amount|decimal }} {{ unit }}{% if not forloop.last %} · {% endif %}{% empty %}–{% endfor %}</td>
+<td class="number col-strong">{% for amount, unit in stock %}{{ amount|decimal }} {{ unit }}{% if not forloop.last %} · {% endif %}{% empty %}–{% endfor %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>

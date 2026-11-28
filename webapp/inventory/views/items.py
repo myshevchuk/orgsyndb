@@ -37,7 +37,7 @@ from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     item_url, layers, list_view, open_vessels,
                                     pick_selected, render_form, saved, tabs)
 from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
-                                htmx_list_push_url, sort_value)
+                                htmx_list_push_url, pairs_sort_key, sort_value)
 from planning import plan
 
 
@@ -94,52 +94,47 @@ class ColumnSpec:
     sort key, LABEL its heading and UNIT the text beneath it, both lazy
     strings of the active language, UNIT possibly holding ``%(year)s``
     for the current year. NUMERIC tells whether it right-aligns its
-    numbers. VALUE gives the value that orders a row when the list is
-    sorted by the column, None for a row without one. GROUP is ``base``
-    for a column both views show and ``table`` for one the table view
-    adds; SHOWN tells whether it shows at first."""
+    numbers, STRONG whether it carries ``col-strong``. VALUE gives the
+    value that orders a row when the list is sorted by the column, None
+    for a row without one."""
 
     key: str
     label: Any
     unit: Any
     numeric: bool
     value: Callable[[Row], Any]
-    group: str
-    shown: bool = True
+    strong: bool = False
 
 
 COLUMN_MODEL: tuple[ColumnSpec, ...] = (
     ColumnSpec("number", gettext_lazy("Article no."), "", False,
-               lambda row: sort_value(row.item.article_number), "base"),
+               lambda row: sort_value(row.item.article_number)),
     ColumnSpec("name", gettext_lazy("Name"), "", False,
-               lambda row: sort_value(row.item.name), "base"),
+               lambda row: sort_value(row.item.name), strong=True),
     ColumnSpec("category", gettext_lazy("Category"), "", False,
-               lambda row: sort_value(row.item.category), "base"),
+               lambda row: sort_value(row.item.category)),
     ColumnSpec("container", gettext_lazy("Container"), "", True,
-               lambda row: row.item.container_order(), "base"),
+               lambda row: row.item.container_order(), strong=True),
     ColumnSpec("stock", gettext_lazy("Stock"), gettext_lazy("containers"),
                True,
                lambda row: (LEVEL_ORDER[row.figures.level],
                             row.figures.coverage is None,
-                            row.figures.coverage or 0), "base"),
+                            row.figures.coverage or 0)),
     ColumnSpec("mean_year", gettext_lazy("Mean per year"),
                gettext_lazy("containers / year"), True,
-               lambda row: row.figures.mean_year, "table"),
+               lambda row: row.figures.mean_year),
     ColumnSpec("this_year", pgettext_lazy("item list", "Delivered"),
                gettext_lazy("%(year)s · containers"), True,
-               lambda row: row.figures.this_year, "table"),
+               lambda row: row.figures.this_year),
     ColumnSpec("coverage", gettext_lazy("Coverage"),
                gettext_lazy("quarters"), True,
-               lambda row: row.figures.coverage, "table"),
+               lambda row: row.figures.coverage),
     ColumnSpec("compartment", gettext_lazy("Compartment"), "", False,
-               lambda row: sort_value(row.item.compartment), "table"),
+               lambda row: sort_value(row.item.compartment)),
     ColumnSpec("box", gettext_lazy("Box"), "", False,
-               lambda row: sort_value(row.item.box), "table"),
-    ColumnSpec("bulk", gettext_lazy("Bulk available"), "", False,
-               lambda row: row.bulk.containers if row.bulk.vessels else None,
-               "table"),
-    ColumnSpec("note", pgettext_lazy("inventory", "Note"), "", False,
-               lambda row: sort_value(row.item.note), "table", shown=False),
+               lambda row: sort_value(row.item.box)),
+    ColumnSpec("bulk", gettext_lazy("Bulk"), "", False,
+               lambda row: pairs_sort_key(row.bulk.amounts)),
 )
 SORT_COLUMNS: tuple[SortColumn, ...] = tuple(
     SortColumn(spec.key, spec.label, spec.value) for spec in COLUMN_MODEL
@@ -257,23 +252,13 @@ class Column:
         return self.spec.numeric
 
     @property
-    def table_only(self) -> bool:
-        """Whether the table view alone shows the column."""
-        return self.spec.group == "table"
-
-    @property
-    def shown(self) -> bool:
-        """Whether the column shows at first."""
-        return self.spec.shown
-
-    @property
     def classes(self) -> str:
         """The classes of the column's header and cells: ``col-`` and
-        its key, ``number`` for a numeric column and ``table-only`` for
-        one that only the table view shows."""
+        its key, ``number`` for a numeric column and ``col-strong`` for
+        a bold column."""
         return " ".join([f"col-{self.key}",
                          *(["number"] if self.numeric else []),
-                         *(["table-only"] if self.table_only else [])])
+                         *(["col-strong"] if self.spec.strong else [])])
 
 
 def columns(filters: ItemFilters, year: int, selected: str = ""
@@ -424,7 +409,6 @@ def item_list(request: HttpRequest) -> HttpResponse:
     chosen, selected = pick_selected(
         shown, request.GET.get("selected", ""), lambda row: row.item.pk)
     menu = stock_menu(rows, filters, selected)
-    shown_columns = columns(filters, today.year, selected)
     response = render(request, "inventory/item_list.html", {
         "rows": shown,
         "chosen": chosen,
@@ -432,9 +416,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "view": list_view(request, VIEW_COOKIE),
         "total": len(rows),
         "filters": filters,
-        "columns": shown_columns,
-        "table_columns": [column for column in shown_columns
-                          if column.table_only],
+        "columns": columns(filters, today.year, selected),
         "order": order_text(filters),
         "sort_order": filters.order,
         "reset": LIST + filters.canonical_query(filtered=False,

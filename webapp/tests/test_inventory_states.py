@@ -13,10 +13,9 @@ from inventory.models import EnteredConsumption, Item
 from . import field_value, make_substance, page, table
 from .inventory_support import (LEVELS, LIST, NEW_ITEM, TODAY, FormCase,
                                 InventoryCase, fresh, item_data, item_url)
+from .main_lists_support import projected_marks
 from .planning_support import PlanningCase
 from .widget_support import history_widget, item_widget, kv
-
-PROJECTED = "hochgerechnet aus dem laufenden Jahr"
 
 
 def edit_data(item: Item, **over: str) -> dict[str, str]:
@@ -274,19 +273,21 @@ class ListTests(InventoryCase):
         self.assertIsNone(marks["N-2"])
         self.assertIsNone(marks["N-3"])
 
-    def test_projected_cells(self) -> None:
+    def test_projected_cells_are_not_marked(self) -> None:
         item = self.item("P-1", quantity=3)
         self.enter(item, 2026, 2, 6)
         self.with_mean_quarter(self.item("P-2", quantity=3), 4)
-        header, rows = self.rows()
+        root = page(self.client.get(LIST))
+        header, rows = table(root)
         by_article = {row[header[0]].text(): row for row in rows}
-        for column in ("Ø Jahr", "Reichweite"):
-            with self.subTest(column=column):
-                cell = by_article["P-1"][column]
-                self.assertIn("projected", cell.classes)
-                self.assertEqual(cell.get("title"), PROJECTED)
-                self.assertNotIn("projected", by_article["P-2"][column]
-                                 .classes)
+        for article in ("P-1", "P-2"):
+            for column in ("Ø Jahr", "Reichweite"):
+                with self.subTest(article=article, column=column):
+                    cell = by_article[article][column]
+                    self.assertNotEqual(cell.text(), "")
+                    self.assertNotIn("projected", cell.classes)
+                    self.assertIsNone(cell.get("title"))
+        self.assertEqual(projected_marks(root), [])
 
 
 class PageTests(InventoryCase):

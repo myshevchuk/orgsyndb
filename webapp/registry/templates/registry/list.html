@@ -5,14 +5,14 @@
 {% translate "Substances" as heading %}<c-list-heading :title="heading" count="{{ substances|length }}" count_id="substance-count" count_refresh>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
-{% translate "Search substances" as search_label %}{% translate "Inventory group" as group_label %}{% translate "Chemical class" as class_label %}<c-filter-bar id="filters" action="/lab/registry/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/registry/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
-<c-filter-search id="filter-q" :value="q" :label="search_label" :inline="False" />
-<c-filter-select name="group" :label="group_label" :inline="False">
+{% translate "Search substances" as search_label %}{% translate "Name, short name, key or CAS" as search_placeholder %}{% translate "Inventory group" as group_label %}{% translate "Chemical class" as class_label %}<c-filter-bar id="filters" action="/lab/registry/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/registry/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
+<c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" />
+<c-filter-select name="group" :label="group_label">
 <option value=""{% if not group %} selected{% endif %}>{% translate "All" context "registry" %}</option>
 {% if group_unknown %}<option value="{{ group }}" selected>{{ group }}</option>
 {% endif %}{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-select name="class" :label="class_label" :inline="False">
+<c-filter-select name="class" :label="class_label">
 <option value=""{% if not chemical_class %} selected{% endif %}>{% translate "All" context "registry" %}</option>
 {% if class_unknown %}<option value="{{ chemical_class }}" selected>{{ chemical_class }}</option>
 {% endif %}{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
@@ -26,14 +26,14 @@
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for found in substances %}<tr id="substance-row-{{ found.pk }}" data-item="{{ found.key }}" hx-get="/lab/registry/substances/{{ found.key }}/detail/" hx-trigger="item-select"{% if found == detail_substance %} aria-current="true"{% endif %}>
-<td>{% substance found %}</td>
+<td class="col-strong col-name" title="{{ found.shown_name }}">{% substance found %}</td>
 <td>{{ found.key }}</td>
 <td>{{ found.short_name }}</td>
 <td>{{ found.group.shown_label }}</td>
 <td>{% for term in found.chemical_classes.all %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
 <td>{{ found.formula }}</td>
 <td class="number">{% if found.mw is not None %}{{ found.mw|decimal }}{% endif %}</td>
-<td>{{ found.article_number|default_if_none:"" }}</td>
+<td class="col-strong">{{ found.article_number|default_if_none:"" }}</td>
 </tr>
 {% endfor %}</tbody>
 </table>

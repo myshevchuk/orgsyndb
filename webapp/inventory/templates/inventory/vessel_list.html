@@ -23,16 +23,13 @@
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for vessel in vessels %}{% with batch=vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/vessels/{{ vessel.pk }}/detail/" hx-trigger="item-select"{% if vessel == detail_vessel %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
-<td>{% substance batch.substance %}</td>
-<td>{{ vessel.article_number|default_if_none:"" }}</td>
+<td class="col-strong">{% substance batch.substance %}</td>
 <td>{{ vessel.kind_label }}</td>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
-<td>{% include "inventory/batch_source.html" %}</td>
-<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td>
+<td>{% if batch.source == "made" and batch.task_step %}<a href="/lab/tasks/{{ batch.task_step.task.number }}/">{{ batch.task_step.task.number }}</a>{% elif batch.source == "bought" and batch.supplier %}{{ batch.supplier }}{% endif %}</td>
+<td class="number col-strong">{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td>
 <td>{{ vessel.location }}</td>
 <td>{{ batch.date|default_if_none:"" }}</td>
-<td>{% if batch.source == "bought" %}{% if vessel.opened_on %}{{ vessel.opened_on }}{% else %}{% translate "sealed" %}{% endif %}{% endif %}</td>
-<td>{{ vessel.note }}</td>
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>

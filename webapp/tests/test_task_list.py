@@ -8,6 +8,7 @@ from django.test import TestCase
 from . import (field_value, make_batch, make_task, make_user, numbers, page,
                past, substance_for, table, task_url)
 from .collection_support import accept
+from .main_lists_support import stacked_controls
 from .task_support import make_product_batch
 
 COLUMNS_DE = ["Nr.", "Produkt", "Priorität", "Bearbeitung", "Beginn",
@@ -360,6 +361,29 @@ class FilterTests(ListCase):
         self.assertEqual(field_value(root, "state"), "all")
         self.assertEqual(field_value(root, "person"), "KL")
         self.assertEqual(field_value(root, "q"), "zimt")
+
+    def test_the_controls_are_inline(self) -> None:
+        root = self.listing()
+        form = root.find("form", id="filters")
+        self.assertEqual([s.get("name") for s in form.find_all("select")],
+                         ["state", "person", "priority"])
+        self.assertEqual(stacked_controls(form), [])
+        prefixes = [e.text() for e in form.find_all(cls="lab-field-prefix")]
+        self.assertEqual(prefixes, ["Status:", "Person:", "Priorität:"])
+
+    def test_the_search_field_names_what_it_searches(self) -> None:
+        search = self.listing().find("form", id="filters").find(
+            "input", name="q")
+        self.assertEqual(search.get("placeholder"),
+                         "Nr., Substanz, Charge oder Notiz")
+        self.assertIn("Suche", search.parent.text())
+
+    def test_the_search_placeholder_in_english(self) -> None:
+        accept(language="en")
+        search = self.listing().find("form", id="filters").find(
+            "input", name="q")
+        self.assertEqual(search.get("placeholder"),
+                         "Number, substance, batch or note")
 
     def test_text_is_found_regardless_of_case(self) -> None:
         match = self.make(None, substance="CH-0012")

@@ -49,7 +49,12 @@ PLANNING_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("actions", pgettext_lazy("planning", "Actions"),
                sortable=False),
 )
-PLANNING_CLASSES = {"runway": "num", "synthesis": "num"}
+PLANNING_CLASSES = {
+    "article": "col-strong col-name",
+    "runway": "num",
+    "synthesis": "num",
+    "start": "col-strong",
+}
 
 
 def _matches_show(row: Row, show: str) -> bool:

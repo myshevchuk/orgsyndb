@@ -501,7 +501,7 @@ class ItemListLiveTests(LiveListAssertions, InventoryCase):
         head = root.find(id="item-head")
         self.assertIsNotNone(head)
         sort_links = head.find_all("a")
-        self.assertEqual(len(sort_links), 12)
+        self.assertEqual(len(sort_links), 11)
         for link in sort_links:
             with self.subTest(sort_link=link.text()):
                 self.assertTrue(link.get("href"))

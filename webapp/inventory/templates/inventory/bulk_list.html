@@ -28,11 +28,11 @@
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for row in rows %}{% with vessel=row.vessel batch=row.vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/end-products/bulk/{{ vessel.pk }}/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}>
-<td><span class="article-number">{{ batch.substance.article.article_number|default_if_none:_("no number") }}</span> {% substance batch.substance %}</td>
+<td class="col-strong col-name" title="{% if batch.substance.article.article_number %}{{ batch.substance.article.article_number }} {% endif %}{{ batch.substance.shown_name }}"><span class="article-number">{{ batch.substance.article.article_number|default_if_none:_("no number") }}</span> {% substance batch.substance %}</td>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
 <td>{% include "inventory/batch_source.html" %}</td>
-<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td class="number col-strong">{{ vessel.amount|in_vessel_unit:vessel }}</td>
 <td>{% if vessel.flask %}<span class="badge badge--flask">{% translate "Flask" %}</span>{% else %}{{ vessel.location }}{% endif %}</td>
 <td>{{ batch.date|default_if_none:"" }}</td>
 <td>{% partial fills %}</td>

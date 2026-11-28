@@ -425,8 +425,9 @@ def category_list_response(request: HttpRequest, category: str
         "ledger": vessel_ledger(single_vessel, 5) if single_vessel else [],
         "selected": selected,
         "order": order,
-        "headers": order.headers(config.base_url, filter_pairs, selected,
-                                 {"amount": "number"}),
+        "headers": order.headers(
+            config.base_url, filter_pairs, selected,
+            {"substance": "col-strong col-name", "amount": "number col-strong"}),
         "view": list_view(request, config.cookie),
         "filters": filters,
         "filter_query": filters.query_string(category),

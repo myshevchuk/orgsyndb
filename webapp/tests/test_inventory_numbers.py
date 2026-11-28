@@ -10,11 +10,13 @@ from inventory.models import Article, EnteredConsumption, Item
 
 from . import (datalist, field_value, make_article, make_item, make_substance,
                make_user, make_vessel, page, table)
+from .collection_support import accept
 from .inventory_support import (DELIVERIES, LIST, MICRO, NEW_BATCH, NEW_ITEM,
                                 NEW_NOTE, SUBSTANCE_PAGE, FormCase,
                                 InventoryCase, fresh, has_amount,
                                 has_number, historical_line, item_data,
                                 item_url, note_data, snapshot)
+from .main_lists_support import must_pane
 
 ADMIN_ITEMS = "/lab/admin/inventory/item/"
 ADMIN_ARTICLES = "/lab/admin/inventory/article/"
@@ -94,7 +96,7 @@ class ItemTests(InventoryCase):
         header, rows = table(page(self.client.get(LIST)))
         cell = next(r for r in rows
                     if r["Name"].text() == "Neuverbindung 9")[
-                        "Bulk verfügbar"]
+                        "Bulk"]
         self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
         self.assertNotIn("90", cell.text())
 
@@ -377,81 +379,114 @@ class AdminTests(InventoryCase):
 class BulkOfAnItemTests(InventoryCase):
     """Requirement: Filling from bulk (an item's bulk is the amount in
     the open vessels of its substance, flasks among them), here in the
-    list's column and on the item page."""
+    list's column, the selected item's details and the item page.
+
+    The list's cell shows the amount by unit alone; the number of
+    containers the bulk would fill shows in the details and on the item
+    page."""
 
     def bulk_cells(self) -> dict[str, object]:
         header, rows = table(page(self.client.get(LIST)))
         return {f"{row[header[0]].text()} "
                 f"{row['Gebinde'].text().replace(' ', '')}":
-                row["Bulk verfügbar"]
+                row["Bulk"]
                 for row in rows}
+
+    def details(self, item: Any) -> str:
+        """The text of the details the list holds with ITEM selected."""
+        root = page(self.client.get(f"{LIST}?selected={item.pk}"))
+        return must_pane(root).text()
+
+    def assertFills(self, text: str, count: str) -> None:
+        """TEXT names COUNT containers, as `33 Gebinde` or `Gebinde: 33`
+        do."""
+        self.assertRegex(
+            text, rf"(?<![\d,.]){count}\s*Gebinde|"
+                  rf"Gebinde\W{{0,3}}{count}(?![\d,.])")
 
     def test_containers_from_bulk(self) -> None:
         """Scenario: Containers from bulk."""
-        self.item("CH-0012", size="10", unit="umol")
+        item = self.item("CH-0012", size="10", unit="umol")
         self.vessel("CH-0012", "mg", "50")
         cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
         self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
-        self.assertTrue(has_number(cell.text(), "33"), cell.text())
+        self.assertFills(self.details(item), "33")
+
+    def test_the_cell_shows_the_amount_and_no_count(self) -> None:
+        self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50")
+        text = self.bulk_cells()[f"CH-0012 10{MICRO}mol"].text()
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertNotIn("→", text)
+        self.assertNotIn("Gebinde", text)
+        self.assertFalse(has_number(text, "33"), text)
+
+    def test_the_english_cell_shows_no_count_either(self) -> None:
+        accept(language="en")
+        self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50")
+        header, rows = table(page(self.client.get(LIST)))
+        text = rows[0]["Bulk"].text()
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertNotIn("→", text)
+        self.assertNotIn("container", text)
+        self.assertFalse(has_number(text, "33"), text)
 
     def test_vessels_are_not_pooled(self) -> None:
         """Scenario: Vessels are not pooled."""
-        self.item("X-1", size="10", unit="mg")
+        item = self.item("X-1", size="10", unit="mg")
         self.vessel("X-1", "mg", "6")
         self.vessel("X-1", "mg", "6")
         cell = self.bulk_cells()["X-1 10mg"]
         self.assertTrue(has_amount(cell.text(), "12", "mg"), cell.text())
-        self.assertTrue(has_number(cell.text(), "0"), cell.text())
+        self.assertFills(self.details(item), "0")
 
     def test_a_flask_counts_like_any_open_vessel(self) -> None:
-        self.item("CH-0012", size="10", unit="umol")
+        item = self.item("CH-0012", size="10", unit="umol")
         self.vessel("CH-0012", "mg", "50", flask=True)
         cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
         self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
-        self.assertTrue(has_number(cell.text(), "33"), cell.text())
+        self.assertFills(self.details(item), "33")
 
     def test_the_vessels_of_several_batches_add_up_in_the_amount(
             self) -> None:
-        self.item("X-1", size="10", unit="mg")
+        item = self.item("X-1", size="10", unit="mg")
         self.vessel("X-1", "mg", "25", flask=True)
         self.vessel("X-1", "mg", "25", location="Regal")
         cell = self.bulk_cells()["X-1 10mg"]
         self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
-        self.assertTrue(has_number(cell.text(), "4"), cell.text())
+        self.assertFills(self.details(item), "4")
 
     def test_the_division_is_exact(self) -> None:
-        self.item("CH-0012", size="10", unit="umol")
+        item = self.item("CH-0012", size="10", unit="umol")
         self.vessel("CH-0012", "mg", "148.16")
-        cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
-        self.assertTrue(has_number(cell.text(), "100"), cell.text())
+        self.assertFills(self.details(item), "100")
 
     def test_each_size_counts_its_own_containers(self) -> None:
-        self.item("CH-0012", size="10", unit="umol")
-        self.item("CH-0012", size="50", unit="umol")
+        small = self.item("CH-0012", size="10", unit="umol")
+        large = self.item("CH-0012", size="50", unit="umol")
         self.vessel("CH-0012", "mg", "50")
-        cells = self.bulk_cells()
-        self.assertTrue(has_number(cells[f"CH-0012 10{MICRO}mol"].text(),
-                                   "33"))
-        self.assertTrue(has_number(cells[f"CH-0012 50{MICRO}mol"].text(),
-                                   "6"))
+        self.assertFills(self.details(small), "33")
+        self.assertFills(self.details(large), "6")
 
     def test_the_amount_is_shown_by_unit(self) -> None:
-        self.item("X-1", size="10", unit="mg")
+        item = self.item("X-1", size="10", unit="mg")
         self.vessel("X-1", "mg", "50")
         self.vessel("X-1", "g", "1")
         text = self.bulk_cells()["X-1 10mg"].text()
         self.assertTrue(has_amount(text, "50", "mg"), text)
         self.assertTrue(has_amount(text, "1", "g"), text)
-        self.assertTrue(has_number(text, "105"), text)
+        self.assertFalse(has_number(text, "105"), text)
+        self.assertFills(self.details(item), "105")
 
     def test_a_vessel_that_does_not_convert_is_left_out(self) -> None:
-        self.item("X-9", size="10", unit="umol")
+        item = self.item("X-9", size="10", unit="umol")
         self.vessel("X-9", "umol", "35")
         self.vessel("X-9", "mg", "500")
         text = self.bulk_cells()[f"X-9 10{MICRO}mol"].text()
         self.assertTrue(has_amount(text, "35", MICRO + "mol"), text)
         self.assertTrue(has_amount(text, "500", "mg"), text)
-        self.assertTrue(has_number(text, "3"), text)
+        self.assertFills(self.details(item), "3")
 
     def test_used_up_vessels_and_other_articles_are_left_out(self) -> None:
         self.item("X-1", size="10", unit="mg")
@@ -473,7 +508,7 @@ class BulkOfAnItemTests(InventoryCase):
         text = page(self.client.get(item_url(item))).text()
         self.assertIn("B-7", text)
         self.assertTrue(has_amount(text, "50", "mg"), text)
-        self.assertTrue(has_number(text, "33"), text)
+        self.assertFills(text, "33")
         self.assertNotIn("B-USED", text)
         self.assertNotIn("B-OTHER", text)
 

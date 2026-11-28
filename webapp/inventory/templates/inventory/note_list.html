@@ -23,13 +23,10 @@
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for note, state in notes %}<tr data-item="{{ note.pk }}" hx-get="/lab/inventory/deliveries/{{ note.pk }}/detail/" hx-trigger="item-select"{% if note == selected_note %} aria-current="true"{% endif %}>
-<td><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</td>
+<td class="col-strong"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</td>
 <td>{{ note.date }}</td>
-<td>{{ note.recipient }}</td>
+<td class="col-strong">{{ note.recipient }}</td>
 <td class="number">{{ note.line_count }}</td>
-<td><ul class="note-lines">
-{% for line in note.lines.all %}<li>{{ line.item.article_number }} {{ line.item.name }} · {{ line.item.container }}{% if line.batch %} · {{ line.batch }}{% endif %} × {{ line.count }}</li>
-{% endfor %}</ul></td>
 </tr>
 {% endfor %}</tbody>
 </table>

@@ -12,7 +12,8 @@ from . import Element, page
 from .collection_support import accept
 from .inventory_support import (LEVELS, TODAY, has_amount, has_number,
                                 item_url, set_shares, vessel_url)
-from .main_lists_support import (lists_records, key_number, unsorted_reasons)
+from .main_lists_support import (key_number, lists_records, projected_marks,
+                                 unsorted_reasons)
 from .planning_support import PlanningCase, has_date, has_days
 from .widget_support import (ISO_DATE, ISO_MOMENT, carries, grid, item_widget,
                              kv, kv_rows, tile, tile_value, tiles,
@@ -210,21 +211,19 @@ class FiguresStripTests(ItemPageCase):
         self.assertIn("ruhend", found.text())
         self.assertIn("4", found.text())
 
-    def test_projected_figures_are_marked(self) -> None:
+    def test_projected_figures_are_not_marked(self) -> None:
         item = self.item("P-1", quantity=3)
         self.enter(item, 2026, 2, 6)
         root = self.show(item)
         for label in (MEAN_QUARTER, MEAN_YEAR, COVERAGE):
             with self.subTest(label=label):
                 found = tile(root, label)
-                self.assertTrue(carries(found, "class", "projected"),
-                                found.text())
-                self.assertTrue(carries(found, "title", PROJECTED),
-                                found.text())
-        for label in (STOCK, THIS_YEAR):
-            with self.subTest(label=label):
-                self.assertFalse(carries(tile(root, label), "class",
-                                         "projected"))
+                self.assertNotEqual(tile_value(found, label), "–")
+                self.assertFalse(carries(found, "class", "projected"),
+                                 found.text())
+                self.assertFalse(carries(found, "title", PROJECTED),
+                                 found.text())
+        self.assertEqual(projected_marks(root), [])
 
     def test_complete_years_are_not_marked(self) -> None:
         root = self.show(self.means_item("CH-0012"))
@@ -277,14 +276,17 @@ class FiguresStripTests(ItemPageCase):
         found = tile(self.show(self.means_item("CH-0012")), THIS_YEAR)
         self.assertEqual(tile_value(found, THIS_YEAR), "13")
 
-    def test_the_english_page_marks_a_projection(self) -> None:
+    def test_the_english_page_does_not_mark_a_projection(self) -> None:
         accept(language="en")
         item = self.item("P-1", quantity=3)
         self.enter(item, 2026, 2, 6)
-        found = tile(self.show(item), "Mean per year")
-        self.assertTrue(carries(found, "class", "projected"), found.text())
-        self.assertTrue(carries(found, "title",
-                                "projected from the current year"))
+        root = self.show(item)
+        found = tile(root, "Mean per year")
+        self.assertNotEqual(tile_value(found, "Mean per year"), "–")
+        self.assertFalse(carries(found, "class", "projected"), found.text())
+        self.assertFalse(carries(found, "title",
+                                 "projected from the current year"))
+        self.assertEqual(projected_marks(root), [])
 
 
 class MovementsTableTests(ItemPageCase):

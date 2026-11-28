@@ -2203,10 +2203,11 @@ has consumption only in four early quarters and is dormant because none
 falls in this calendar year or the previous one.
 
 `CH-0013` in 1 g entered stock 60 days before seeding and is delivered
-every 15 days. When that stock entry date falls in the seeding year, it
-carries the blue **neu** (**new**) mark and has projected consumption
-means. **1-Phenylethanol** carries the mark when its stock entry date
-falls in the seeding year too.
+every 15 days. When that stock entry date falls in the seeding year,
+the item carries the blue **neu** (**new**) mark and the application
+projects its consumption means from that year's deliveries.
+**1-Phenylethanol** carries the mark when its stock entry date falls
+in the seeding year too.
 
 At every start, `app` applies migrations, runs `demo_data --if-empty`,
 then `forge_client`, and starts serving requests. The demo command fills
@@ -2670,8 +2671,9 @@ stays **Endprodukte** on all three.
 - **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, counts
   delivery notes. Use it to find a past delivery or book a new one.
 
-At window widths of 900 px and up, the inventory lists fit the window.
-Scroll inside the tables and details panes. Table headers stay in view.
+With the sidebar open, the lab's main tables are designed to fit a
+window 1650 px wide. At window widths of 900 px and up, scroll inside
+the inventory tables and details panes. Table headers stay in view.
 In narrower windows the page scrolls.
 
 #### Find intermediates and commercial chemicals
@@ -2815,23 +2817,24 @@ Use the switch at the right end of the **Gebinde** toolbar. Choose
 the selected item is stored and read its consumption figures. The
 details pane opens beside the table or below it in a narrow window.
 
-Both views start with **Artikelnr.** (**Article no.**), **Name**,
-**Kategorie** (**Category**), **Gebinde** (**Container**) and
-**Bestand** (**Stock**), in that order. These five columns are always
-visible and keep the same widths in both views.
+Both views always show all eleven columns in the same order.
+From left to right, they are **Artikelnr.** (**Article no.**), **Name**,
+**Kategorie** (**Category**), **Gebinde** (**Container**), **Bestand**
+(**Stock**), **Ø Jahr** (**Mean per year**), **Abgegeben** (**Delivered**),
+**Reichweite** (**Coverage**), **Fach** (**Compartment**), **Box** and
+**Bulk**.
 
-**Tabelle** adds **Ø Jahr** (**Mean per year**),
-**Abgegeben** (**Delivered**), **Reichweite** (**Coverage**), **Fach**
-(**Compartment**), **Box**, **Bulk verfügbar** (**Bulk available**) and
-**Bemerkung** (**Note**), in that order. Only **Bemerkung** starts hidden.
-Use **Spalten** (**Columns**) to show or hide these additional columns.
-In **Details**, **Spalten** is unavailable.
+Rows have one compact height. On screen, long names end in an ellipsis.
+Hover over the **Name** cell to read the full name in a tooltip.
 
 **Bestand** counts containers. **Ø Jahr** gives containers per year,
 and **Abgegeben** shows this year's consumption as a plain container
 count. **Reichweite** tells you how many quarters the stock will last at
 the mean rate of consumption. Small lines under these headings show the
 units and the current year for **Abgegeben**.
+
+**Bulk** shows the total amount in the substance's open vessels for
+each unit, for example `150 mg`.
 
 In either view, select an item with a plain click on its row, away from
 links and the check box. When focus is in the table, press ↑ or ↓ to
@@ -2870,21 +2873,22 @@ in a new tab still works as a page of its own.
 Under **Fertige Gebinde** (**Finished containers**), read **Fach** and
 **Box** to find the finished containers. Each empty field reads **nicht
 hinterlegt** (**not recorded**). Under **Bulk, separat gelagert**
-(**Bulk, stored separately**), the pane lists each open vessel of the
-substance with its batch and amount. It shows the location when recorded.
+(**Bulk, stored separately**), read the amounts by unit and how many
+whole containers of the selected size the bulk can fill. The pane lists
+each open vessel of the substance with its batch and amount. It shows
+the location when recorded.
 Without a location, a flask shows **Kolben** (**Flask**) and a stored
 vessel shows **nicht hinterlegt**. Select a vessel to open its page.
 
 Under **Verbrauch** (**Consumption**), read this year's consumption to
-date in containers and the means per year and per quarter. A mean or
-coverage projected from the current year appears in italics. A dash
-(`–`) marks a missing mean or coverage. The bar chart shows this year's
+date in containers and the means per year and per quarter. A dash (`–`)
+marks a missing mean or coverage. The bar chart shows this year's
 quarters and marks the current one **laufend** (**running**). The table
 shows each quarter and the annual total for this year and the previous
 two years. Future quarters have no bars and stay empty in the table.
 The pane lists the years with positive consumption entered by hand and
-reminds you that the current year's total is incomplete. The item's note
-appears below the figures when present.
+reminds you that the current year's total is incomplete. The item's
+**Bemerkung** (**Note**) appears below the figures when present.
 
 The **Bestand** column shows container counts alone, coloured by stock
 level. Hover over a count to read the level's name; screen readers also
@@ -2919,12 +2923,14 @@ Choose it again to reverse the order. ▲ or ▼ marks the sorted column.
 Sorting keeps your filters, and filtering keeps your order. Text sorts
 regardless of case. Containers sort from smallest to largest, with mass
 sizes before amount-of-substance sizes, so 100 mg, 250 mg and 1 g come
-before µmol sizes. Locations sort with `2` before
-`10`. Consumption and coverage sort by value, smallest first; bulk sorts
-by how many containers the open vessels would fill. Items without a value
-in the sorting column come last in either direction. Ties sort by article
-number, then container size. Unnumbered items follow numbered ones and
-sort by name, then container size.
+before µmol sizes. Locations sort with `2` before `10`. Consumption and
+coverage sort by value, smallest first. When **Bulk** sorts in ascending
+order, items with bulk measured by mass come first, ordered by total
+mass in mg. Items with bulk measured only in amounts of substance
+follow, ordered by total in µmol. Items without a value in the sorting
+column come last in either direction. Ties sort by article number, then
+container size. Unnumbered items follow numbered ones and sort by name,
+then container size.
 
 To put urgent items first, sort by **Bestand** in ascending order (▲).
 This orders items as out, critical, low, watch, sufficient, never delivered
@@ -2940,38 +2946,31 @@ name and article number when present, in every order. Each numbered row
 keeps its own article-number link and, when you are signed in, its own
 check box.
 
-To spot heavily used items, compare the five colour steps in **Ø Jahr**
-and **Abgegeben**. Each column ranks its positive values across the whole
-inventory into fifths, from least to most consumed; equal values share a
-step. The scale compares all categories and container sizes together.
-Zero and missing values stay uncoloured, and filtering does not change
-the colours. Open **Ansicht** (**View**) beside **Spalten** to find
-**Verbrauch einfärben** (**Colour consumption**) and its scale from
-**wenig** (**little**) to **viel** (**much**). It is checked by default.
-Uncheck it to hide the consumption colours.
+To spot heavily used items in either view, compare the five colour steps
+in **Ø Jahr** and **Abgegeben**. Read the scale from **wenig** (**little**)
+to **viel** (**much**) in the note below the table. Each column colours
+its positive values by ranking them across the whole inventory into
+fifths, from least to most consumed. Equal values share a step. The scale
+compares all categories and container sizes together. Zero and missing
+values stay uncoloured, and filtering does not change the colours.
 
-To fit more rows on screen, use **Zeilenhöhe** (**Row height**) in
-**Ansicht**. Choose **Kompakt** (**Compact**), the default, or
-**Sehr kompakt** (**Very compact**). Your browser uses local storage to
-remember column choices, row height and consumption colours across
-pages. It remembers the view in the `item-list-view` cookie, separately
-from the address. **Tabelle** is the default. Bookmark the address to
-save your filters and sort order.
+**Tabelle** is the default. Your browser remembers your chosen view in
+the `item-list-view` cookie, separately from the address. Bookmark the
+address to save your filters and sort order.
 
-The **Bestandsstatus**, **Weitere Filter** and **Spalten** menus open beside
-their buttons. Without JavaScript, these menus open in the centre of the
+The **Bestandsstatus** and **Weitere Filter** menus open beside their
+buttons. Without JavaScript, these menus open in the centre of the
 window. Choose **Filtern** (**Filter**) to apply filter choices. You can
-still change the view for the current page. Saving changes to view
-settings and selecting another row by click or arrow key require
-JavaScript in either view. JavaScript also animates the switch when your
-browser supports view transitions and reduced motion is off.
+still change the view for the current page. Remembering the chosen view
+and selecting another row by click or arrow key require JavaScript in
+either view. JavaScript also animates the switch when your browser
+supports view transitions and reduced motion is off.
 
 For a long or wide list, scroll inside the table's box. The column headers
 stay at the top, and **Artikelnr.** stays at the left. The box is at most
-the window's height. Printing includes every listed row and uses the
-columns selected in **Spalten** in either view. The details pane, filter
-controls, menus, view controls and the note below the table stay on
-screen only.
+the window's height. Printing includes every listed row, every column
+and full names in either view. The details pane, filter controls, menus,
+view switch and the note below the table stay on screen only.
 
 #### Book deliveries and correct counts
 
@@ -3024,10 +3023,13 @@ together, the application refuses the whole note and changes nothing.
 A historical note records consumption without changing stock.
 
 In **Lieferungen**, find the newest notes first. Filter by item or
-search by number or recipient. **Tabelle** (**Table**) shows each
-note's lines, with batches and container counts. In **Details**, select
-a row to read its lines and follow **Lieferschein öffnen** (**Open
-delivery note**).
+search by number or recipient. In both views, each row shows the note's
+number, date, recipient and number of lines. Marks beside the number
+show whether the note was **nachgetragen** (**entered later**),
+**storniert** (**reversed**) or **teilweise storniert** (**partly
+reversed**). In **Details**, select a row to read the delivery lines,
+including the article, batch and container count for each. Choose
+**Lieferschein öffnen** (**Open delivery note**) to open the note's page.
 
 On the note page, each batch links to its own page. Each line also
 shows the item's current **Fach** and **Box**, including on historical
@@ -3112,10 +3114,9 @@ From the next year, the means use complete calendar years again.
 
 **Coverage** is stock divided by the quarterly mean, expressed in
 quarters. It is blank without a positive mean and for dormant or
-never-delivered items; their means still show when available. Projected
-means and the coverage calculated from them appear in italics in the
-list and on the item page. Hover over them to see **hochgerechnet aus
-dem laufenden Jahr** (**projected from the current year**). These means
+never-delivered items. Their means still show when available. The item
+list, details pane and item page use the same format for projected means
+and their coverage as for figures based on complete years. The means
 also determine the stock level. The item page shows quarterly consumption
 for the last two complete years and the current year as a bar chart and
 table.
@@ -3200,9 +3201,15 @@ opening amount, unit, location and note.
 #### Find and move material in vessels
 
 **Alle Gefäße** (**All vessels**) shows open vessels of every substance,
-including substances without an article. It shows the batch, source,
-amount, location and batch date. To narrow the list, choose an
-**Art** (**Kind**).
+including substances without an article. From left to right, the columns
+are **Gefäß** (**Vessel**), **Name**, **Art** (**Kind**), **Charge**
+(**Batch**), **Herkunft** (**Source**), **Menge** (**Amount**), **Ort**
+(**Location**) and **Datum** (**Date**). **Name** shows the full substance
+name, and **Datum** shows the batch date. **Herkunft** shows the linked
+task number for a made batch or the supplier for a bought batch. The
+cell is empty if the batch has no task number or supplier to show.
+
+To narrow the list, choose an **Art**.
 
 - **Kolben** (**Flask**) holds the yield recorded from a task step
   without a storage location.
@@ -3223,13 +3230,16 @@ Reversals identify the movement they reverse. Use **Bearbeiten**
 **Korrigieren** (**Correct**) to record the amount and give a note.
 Each vessel keeps its batch and unit and stays a flask or a stored vessel.
 
-For vessels of bought batches, read **Angebrochen** (**Opened**) in
-**Alle Gefäße** or **Zustand** (**State**) on the vessel page to see
-the opening date or **versiegelt** (**sealed**). A vessel you enter for
-a bought batch starts sealed. The first filling, withdrawal or transfer
-out marks it opened on the movement's date. If a transfer creates the
-vessel, it starts with that transfer's date as its opening date. The
-opening date is retained through corrections and reversals.
+For a vessel of a bought batch, choose **Details** in **Alle Gefäße**
+and select its row. Read the opening date or **versiegelt** (**sealed**)
+under **Angebrochen** (**Opened**). The vessel page shows the same
+information under **Zustand** (**State**).
+
+A vessel you enter for a bought batch starts sealed. The first filling,
+withdrawal or transfer out marks it opened on the movement's date. If a
+transfer creates the vessel, it starts with that transfer's date as its
+opening date. The opening date is retained through corrections and
+reversals.
 
 To enter or clear a bought vessel's opening date, choose **Bearbeiten**
 and change **Angebrochen am** (**Opened on**). Use today or an earlier
@@ -3287,9 +3297,10 @@ The booking adds the containers to the item's share for the vessel's
 batch and deducts the amount from the vessel in the same operation.
 If there is too little material, neither changes.
 
-The item's **Bulk** section lists its open vessels and how many whole
-containers each can fill. The total adds the counts for vessels whose
-amounts convert into the item's unit.
+On the item page, **Bulk** shows the amounts by unit and the total
+number of whole containers the bulk can fill. It lists each open
+vessel's amount and how many whole containers it can fill. The total
+adds the counts for vessels whose amounts convert into the item's unit.
 
 Staff can inspect articles, items, batches, vessels, delivery notes
 and movements at `/lab/admin/`. The item's counts by batch are

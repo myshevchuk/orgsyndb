@@ -31,9 +31,12 @@ NOTE_COLUMNS: tuple[SortColumn, ...] = (
                lambda note: sort_value(note.recipient)),
     SortColumn("lines", gettext_lazy("Lines"),
                lambda note: sort_value(note.line_count)),
-    SortColumn("contents", gettext_lazy("Contents"), sortable=False),
 )
-NOTE_CLASSES = {"lines": "number table-only-summary"}
+NOTE_CLASSES = {
+    "number": "col-strong",
+    "recipient": "col-strong",
+    "lines": "number",
+}
 
 
 def note_states(notes: list[DeliveryNote]) -> dict[int, str]:
@@ -93,9 +96,7 @@ def note_list(request: HttpRequest) -> HttpResponse:
     order = Order.from_query(request.GET, NOTE_COLUMNS, "date",
                              default_descending=True)
     notes = DeliveryNote.objects.annotate(line_count=Count("lines")) \
-        .prefetch_related("lines__item__article__substance",
-                          "lines__batch").order_by(
-                              *DeliveryNote._meta.ordering)
+        .order_by(*DeliveryNote._meta.ordering)
     if chosen.isdigit():
         notes = notes.filter(pk__in=DeliveryNote.objects.filter(
             lines__item_id=int(chosen)).values("pk"))
@@ -122,7 +123,8 @@ def note_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(DELIVERIES, filter_pairs, selected,
                                  NOTE_CLASSES),
         **(note_context(selected_note, state=states[selected_note.pk],
-                        lines=list(selected_note.lines.all()))
+                        lines=list(selected_note.lines.select_related(
+                            "item__article__substance", "batch")))
            if selected_note else {}),
         "view": list_view(request, NOTE_COOKIE),
         "layers": layers(DELIVERIES),
