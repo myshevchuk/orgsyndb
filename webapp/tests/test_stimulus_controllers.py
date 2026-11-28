@@ -29,7 +29,6 @@ LAB_CSS = STATIC / "lab.css"
 
 EXPECTED_CONTROLLERS = [
     "master-detail",
-    "split",
     "sortable-table",
     "dialog",
     "popover-anchor",
@@ -929,6 +928,7 @@ function createHarness(options = {}) {
 
   const locationObj = {
     pathname: options.pathname || "/lab/inventory/",
+    origin: "http://testserver",
     search: options.search || "",
     hash: options.hash || "",
     get href() {
@@ -943,6 +943,10 @@ function createHarness(options = {}) {
   };
   const historyObj = {
     state: null,
+    length: options.historyLength === undefined
+      ? 1 : options.historyLength,
+    backCalls: 0,
+    back() { this.backCalls += 1; },
     replaceCalls: [],
     replaceState(state, title, url) {
       this.state = state;
@@ -954,6 +958,7 @@ function createHarness(options = {}) {
     },
   };
   const doc = new Document(locationObj);
+  doc.referrer = options.referrer || "";
   doc.documentElement.lang = options.lang || "de";
   if (options.bodyHtml) parseHTMLInto(options.bodyHtml, doc, doc.body);
 
@@ -1104,16 +1109,16 @@ NESTED_HTML = r"""
     <div id="view-bar">
       <input type="radio" id="view-table" name="view" value="table">
       <input type="radio" id="view-details" name="view" value="details"
-             checked>
-      <button type="button" id="toggle"
-              data-lab-action="click->split#toggle">Larger</button>
+             data-major="first" checked>
+      <input type="radio" id="view-details-wide" name="view"
+             value="details" data-major="second">
       <a id="outside-link" href="/lab/inventory/batches/new/"
          data-dialog>New batch</a>
     </div>
     <div id="outer" class="split split--outer split--rows"
-         data-major="first" data-controller="split master-detail"
+         data-major="first" data-controller="master-detail"
          data-view="details" data-cookie="intermediate-list-view"
-         data-split-cookie-value="intermediate-list-split"
+         data-split-cookie="intermediate-list-split"
          data-master-detail-level-value="outer"
          data-master-detail-rows-value="item-rows"
          data-master-detail-pane-value="item-detail"
@@ -1500,9 +1505,9 @@ const h = createHarness({
               popovertarget="columns-menu">Columns</button>
     </div>
     <div id="layout" class="split split--outer split--rows"
-         data-major="first" data-controller="split master-detail"
+         data-major="first" data-controller="master-detail"
          data-view="table" data-cookie="item-list-view"
-         data-split-cookie-value="item-list-split"
+         data-split-cookie="item-list-split"
          data-master-detail-level-value="outer"
          data-master-detail-rows-value="item-rows"
          data-master-detail-pane-value="item-detail"
@@ -1670,9 +1675,9 @@ const h = createHarness({
   pathname: "/lab/tasks/",
   bodyHtml: `
     <div id="layout" class="split split--outer split--rows"
-         data-major="first" data-controller="split master-detail"
+         data-major="first" data-controller="master-detail"
          data-view="details" data-cookie="task-list-view"
-         data-split-cookie-value="task-list-split"
+         data-split-cookie="task-list-split"
          data-master-detail-level-value="outer"
          data-master-detail-rows-value="item-rows"
          data-master-detail-pane-value="item-detail"
@@ -2286,7 +2291,7 @@ process.stdout.write(JSON.stringify({
         self.assertFalse(result["innerScripted"])
         self.assertFalse(result["innerView"])
 
-    def test_the_toggle_swaps_the_larger_side_and_remembers_it(
+    def test_a_details_button_sets_the_larger_side_and_remembers_it(
             self) -> None:
         result = run_node_test(nested_script(r"""
 const writes = [];
@@ -2296,21 +2301,39 @@ Object.defineProperty(h.doc, "cookie", {
 });
 const outer = h.doc.getElementById("outer");
 const inner = h.doc.getElementById("inner");
+const choose = (id) => {
+  for (const radio of h.doc.querySelectorAll('input[name="view"]')) {
+    radio.checked = radio.id === id;
+  }
+  h.fire(h.doc.getElementById(id), "change");
+};
 const majors = [outer.getAttribute("data-major")];
-h.fire(h.doc.getElementById("toggle"), "click", { button: 0 });
-majors.push(outer.getAttribute("data-major"));
-h.fire(h.doc.getElementById("toggle"), "click", { button: 0 });
-majors.push(outer.getAttribute("data-major"));
+const views = [outer.getAttribute("data-view")];
+const mark = () => {
+  majors.push(outer.getAttribute("data-major"));
+  views.push(outer.getAttribute("data-view"));
+};
+choose("view-details-wide");
+mark();
+const afterWide = writes.length;
+choose("view-details-wide");
+mark();
+const afterRepeat = writes.length;
+choose("view-details");
+mark();
 process.stdout.write(JSON.stringify({
-  majors, writes, inner: inner.getAttribute("data-major"),
-  view: outer.getAttribute("data-view"),
+  majors, views, writes, afterWide, afterRepeat,
+  inner: inner.getAttribute("data-major"),
   triggers: triggers().length,
 }));
 """))
-        self.assertEqual(result["majors"], ["first", "second", "first"])
+        self.assertEqual(result["majors"],
+                         ["first", "second", "second", "first"])
+        self.assertEqual(result["views"], ["details"] * 4)
         self.assertEqual(result["inner"], "first")
-        self.assertEqual(result["view"], "details")
         self.assertEqual(result["triggers"], 0)
+        self.assertEqual(result["afterWide"], 1)
+        self.assertEqual(result["afterRepeat"], 1)
         self.assertEqual(len(result["writes"]), 2, result["writes"])
         for write, side in zip(result["writes"], ("second", "first")):
             parts = [part.strip() for part in write.split(";")]
@@ -2318,6 +2341,55 @@ process.stdout.write(JSON.stringify({
             self.assertIn("path=/lab/inventory/intermediates/", parts)
             self.assertIn("SameSite=Lax", parts)
             self.assertIn("max-age=31536000", [p.lower() for p in parts])
+
+    def test_the_table_button_sets_the_view_and_leaves_the_side(
+            self) -> None:
+        result = run_node_test(nested_script(r"""
+const writes = [];
+let jar = "";
+Object.defineProperty(h.doc, "cookie", {
+  get: () => jar, set: (value) => { writes.push(value); jar = value; },
+});
+const outer = h.doc.getElementById("outer");
+const choose = (id) => {
+  for (const radio of h.doc.querySelectorAll('input[name="view"]')) {
+    radio.checked = radio.id === id;
+  }
+  h.fire(h.doc.getElementById(id), "change");
+};
+choose("view-details-wide");
+choose("view-table");
+const afterTable = {
+  major: outer.getAttribute("data-major"),
+  view: outer.getAttribute("data-view"),
+};
+choose("view-details");
+process.stdout.write(JSON.stringify({
+  writes, afterTable, major: outer.getAttribute("data-major"),
+  view: outer.getAttribute("data-view"),
+}));
+"""))
+        self.assertEqual(result["afterTable"],
+                         {"major": "second", "view": "table"})
+        cookies = [write.split(";")[0] for write in result["writes"]]
+        self.assertEqual(cookies, [
+            "intermediate-list-split=second",
+            "intermediate-list-view=table",
+            "intermediate-list-split=first",
+            "intermediate-list-view=details"])
+        self.assertEqual(result["major"], "first")
+        self.assertEqual(result["view"], "details")
+
+    def test_the_larger_area_toggle_is_not_wired(self) -> None:
+        result = run_node_test(nested_script(r"""
+const outer = h.doc.getElementById("outer");
+process.stdout.write(JSON.stringify({
+  controllers: outer.getAttribute("data-controller"),
+  registered: [...h.startedApps[0].router.modulesByIdentifier.keys()],
+}));
+"""))
+        self.assertEqual(result["controllers"], "master-detail")
+        self.assertNotIn("split", result["registered"])
 
     def test_a_dialog_hides_the_popover_that_holds_its_link(self) -> None:
         result = run_node_test(nested_script(r"""
@@ -2423,6 +2495,109 @@ process.stdout.write(JSON.stringify({
                          "outside-link")
 
 
+class BackLinkScriptTests(SimpleTestCase):
+    """Requirement: Back links (the link returns through history when
+    the page was opened from a page of its list)."""
+
+    def clicks(self, referrer: str, length: int = 3,
+               href: str = "/lab/registry/?selected=acetophenone",
+               **init: object) -> dict:
+        """What a click on the back link does on a page whose referrer is
+        REFERRER, after LENGTH history entries."""
+        return run_node_test(f"""
+const h = createHarness({{
+  pathname: "/lab/registry/substances/acetophenone/",
+  referrer: {json.dumps(referrer)},
+  historyLength: {length},
+  bodyHtml: `
+    <p class="lab-back"><a id="back" href="{href}" data-back>Back</a></p>
+    <a id="plain" href="/lab/registry/?selected=acetophenone">Plain</a>
+    <a id="inner" href="{href}" data-back><span id="arrow">x</span></a>
+  `,
+}});
+await h.flush();
+const click = (id, init) => {{
+  const ev = h.fire(h.doc.getElementById(id), "click",
+                    Object.assign({{ button: 0 }}, init));
+  return ev.defaultPrevented;
+}};
+const init = {json.dumps(init)};
+const prevented = click("back", init);
+process.stdout.write(JSON.stringify({{
+  prevented, backs: h.historyObj.backCalls,
+  inner: click("inner", init), after: h.historyObj.backCalls,
+  plain: click("plain", init), final: h.historyObj.backCalls,
+}}));
+""")
+
+    def test_a_click_from_the_list_goes_back_in_history(self) -> None:
+        """Scenario: Back to the list as it was."""
+        result = self.clicks(
+            "http://testserver/lab/registry/?q=aceto&selected="
+            "acetophenone")
+        self.assertTrue(result["prevented"])
+        self.assertEqual(result["backs"], 1)
+
+    def test_a_click_inside_the_link_goes_back_too(self) -> None:
+        result = self.clicks("http://testserver/lab/registry/?q=aceto")
+        self.assertTrue(result["inner"])
+        self.assertEqual(result["after"], 2)
+
+    def test_only_links_marked_data_back_are_taken(self) -> None:
+        result = self.clicks("http://testserver/lab/registry/")
+        self.assertFalse(result["plain"])
+        self.assertEqual(result["final"], result["after"])
+
+    def test_a_page_opened_directly_follows_the_link(self) -> None:
+        for referrer, length in (("", 1), ("", 3)):
+            with self.subTest(referrer=referrer, length=length):
+                result = self.clicks(referrer, length)
+                self.assertFalse(result["prevented"])
+                self.assertEqual(result["backs"], 0)
+
+    def test_a_single_history_entry_follows_the_link(self) -> None:
+        result = self.clicks("http://testserver/lab/registry/", length=1)
+        self.assertFalse(result["prevented"])
+        self.assertEqual(result["backs"], 0)
+
+    def test_a_referrer_of_another_page_follows_the_link(self) -> None:
+        for referrer in ("http://testserver/lab/tasks/",
+                         "http://testserver/lab/registry/substances/",
+                         "http://testserver/lab/",
+                         "http://testserver/lab/registry",
+                         "not a url"):
+            with self.subTest(referrer=referrer):
+                result = self.clicks(referrer)
+                self.assertFalse(result["prevented"])
+                self.assertEqual(result["backs"], 0)
+
+    def test_a_referrer_of_another_origin_follows_the_link(self) -> None:
+        for referrer in ("https://example.org/lab/registry/",
+                         "http://testserver:8000/lab/registry/",
+                         "https://testserver/lab/registry/"):
+            with self.subTest(referrer=referrer):
+                result = self.clicks(referrer)
+                self.assertFalse(result["prevented"])
+                self.assertEqual(result["backs"], 0)
+
+    def test_the_selection_in_the_address_does_not_matter(self) -> None:
+        result = self.clicks("http://testserver/lab/registry/",
+                             href="/lab/registry/")
+        self.assertTrue(result["prevented"])
+        self.assertEqual(result["backs"], 1)
+
+    def test_a_click_with_a_modifier_or_button_follows_the_link(
+            self) -> None:
+        referrer = "http://testserver/lab/registry/"
+        for init in ({"ctrlKey": True}, {"metaKey": True},
+                     {"shiftKey": True}, {"altKey": True},
+                     {"button": 1}, {"button": 2}):
+            with self.subTest(init=init):
+                result = self.clicks(referrer, **init)
+                self.assertFalse(result["prevented"])
+                self.assertEqual(result["backs"], 0)
+
+
 class TemplateWiringTests(PlanningCase):
     """Rendered pages attach the Stimulus data-controller attributes."""
 
@@ -2445,8 +2620,7 @@ class TemplateWiringTests(PlanningCase):
         self.assertIn("dialog",
                       self.controllers(root.find("dialog", id="lab-dialog")))
         layout = must_outer_split(root)
-        self.assertEqual(self.controllers(layout),
-                         {"split", "master-detail"})
+        self.assertEqual(self.controllers(layout), {"master-detail"})
         for pop_id in ("stock-menu", "more-filters"):
             with self.subTest(popover=pop_id):
                 self.assertIn("popover-anchor",
@@ -2468,8 +2642,7 @@ class TemplateWiringTests(PlanningCase):
         self.planned_item("NV-10", quantity=10)
         root = self.check_page(PLAN)
         layout = must_outer_split(root)
-        self.assertEqual(self.controllers(layout),
-                         {"split", "master-detail"})
+        self.assertEqual(self.controllers(layout), {"master-detail"})
         self.assertIn("planning-list-view", layout.attrs.values())
         grid = root.find("table", cls="main-table")
         self.assertIsNotNone(grid)
@@ -2499,7 +2672,7 @@ class TemplateWiringTests(PlanningCase):
                 root = self.check_page(path)
                 layout = must_outer_split(root)
                 self.assertEqual(self.controllers(layout),
-                                 {"split", "master-detail"})
+                                 {"master-detail"})
                 self.assertEqual(
                     {name: value for name, value in layout.attrs.items()
                      if name.startswith("data-master-detail-")},
@@ -2507,8 +2680,9 @@ class TemplateWiringTests(PlanningCase):
                      "data-master-detail-rows-value": "item-rows",
                      "data-master-detail-pane-value": "item-detail",
                      "data-master-detail-param-value": "selected"})
-                self.assertRegex(layout.get("data-split-cookie-value"),
+                self.assertRegex(layout.get("data-split-cookie"),
                                  r"^[a-z]+-list-split$")
+                self.assertIsNone(layout.get("data-split-cookie-value"))
                 self.assertTrue([value for value in layout.attrs.values()
                                  if value.endswith("-list-view")])
                 self.assertIsNotNone(root.find("table", cls="main-table"))

@@ -188,10 +188,10 @@ class SplitTests(MainListCase):
         self.assertIn(f"split--{direction}", outer.classes)
         self.assertNotIn(f"split--{other}", outer.classes)
         self.assertEqual(outer.get("data-major"), major)
-        self.assertEqual(set((outer.get("data-controller") or "").split()),
-                         {"split", "master-detail"})
-        self.assertEqual(outer.get("data-split-cookie-value"),
+        self.assertEqual(outer.get("data-controller"), "master-detail")
+        self.assertEqual(outer.get("data-split-cookie"),
                          SPLIT_COOKIES[spec.name])
+        self.assertIsNone(outer.get("data-split-cookie-value"))
         for name, value in OUTER_VALUES.items():
             self.assertEqual(outer.get(name), value, name)
         first, second = split_panes(outer)
@@ -220,19 +220,48 @@ class SplitTests(MainListCase):
         self.assertEqual(len(root.find_all("div", cls="split--outer")), 1)
 
     @per_list
-    def test_the_page_has_the_toggle(self, spec: MainList) -> None:
+    def test_the_page_has_the_layout_picker_and_no_toggle(
+            self, spec: MainList) -> None:
         for view in ("details", "table"):
             with self.subTest(view=view):
                 self.client.cookies[spec.cookie] = view
                 root = self.fetch(spec.path)
-                found = [button for button in root.find_all("button")
-                         if "split#toggle" in (
-                             button.get("data-lab-action") or "")]
-                self.assertEqual(len(found), 1)
-                self.assertIsNotNone(found[0].closest("main"))
-                self.assertTrue(
-                    found[0].closest("form") is None
-                    or found[0].get("type") == "button")
+                self.assertEqual(root.find_all("button", cls="pane-toggle"),
+                                 [])
+                self.assertEqual(
+                    [button for button in root.find_all("button")
+                     if "split#toggle" in (
+                         button.get("data-lab-action") or "")], [])
+                self.assertNotIn("Größere Fläche", root.text())
+                pickers = root.find_all("fieldset", cls="layout-picker")
+                self.assertEqual(len(pickers), 1)
+                self.assertIsNotNone(pickers[0].closest("main"))
+                self.assertIn("view-switch", pickers[0].classes)
+                radios = pickers[0].find_all("input", type="radio")
+                self.assertEqual(
+                    [(r.get("id"), r.get("name"), r.get("value"),
+                      r.get("data-major")) for r in radios],
+                    [("view-table", "view", "table", None),
+                     ("view-details", "view", "details", "first"),
+                     ("view-details-wide", "view", "details", "second")])
+
+    @per_list
+    def test_the_picker_checks_the_button_of_the_view_and_side(
+            self, spec: MainList) -> None:
+        name = SPLIT_COOKIES[spec.name]
+        for view, side, checked in (
+                ("table", "first", "view-table"),
+                ("table", "second", "view-table"),
+                ("details", "first", "view-details"),
+                ("details", "second", "view-details-wide")):
+            with self.subTest(view=view, side=side):
+                self.client.cookies[spec.cookie] = view
+                self.client.cookies[name] = side
+                root = self.fetch(spec.path)
+                self.assertEqual(
+                    [r.get("id") for r in root.find_all(
+                        "input", type="radio", name="view")
+                     if "checked" in r.attrs], [checked])
 
     @per_list
     def test_the_cookie_gives_the_larger_side(self, spec: MainList) -> None:
@@ -639,14 +668,15 @@ class ViewTests(MainListCase):
                          "table")
 
     @per_list
-    def test_the_views_are_named_table_and_details(
+    def test_the_picker_buttons_are_named_for_their_layouts(
             self, spec: MainList) -> None:
         root = self.fetch(spec.path)
         switch = root.find("fieldset", cls="view-switch")
         self.assertIsNotNone(switch)
         self.assertEqual([label.text() for label in
                           switch.find_all("label")],
-                         ["Tabelle", "Details"])
+                         ["Tabelle", "Details, Tabelle größer",
+                          "Details, Details größer"])
 
 
 # ---------------------------------------------------------------------------

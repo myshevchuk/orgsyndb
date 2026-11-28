@@ -2,10 +2,12 @@
 links), on the pages of the demo data set."""
 
 from typing import Iterator
+from urllib.parse import urlsplit
 
 from . import Element, page
 from .collection_support import accept
 from .demo_support import SeededCase
+from .main_lists_support import marked, must_pane, query_of
 
 ARROW = "←"
 
@@ -56,6 +58,22 @@ class BackLinkTests(SeededCase):
              "/lab/journal/"),
         ]
 
+    def selections(self) -> dict[str, str | None]:
+        """The ``selected`` that the back link of each kind of record
+        names: the record's key, none for a notebook."""
+        from inventory.models import Batch, DeliveryNote, Item, Vessel
+        from registry.models import Substance
+        from tasks.models import Task
+        return {
+            "item": str(Item.objects.first().pk),
+            "batch": str(Batch.objects.first().pk),
+            "vessel": str(Vessel.objects.first().pk),
+            "delivery note": str(DeliveryNote.objects.first().pk),
+            "task": Task.objects.first().number,
+            "substance": Substance.objects.first().key,
+            "notebook": None,
+        }
+
     def pages(self) -> Iterator[tuple[str, Element, str, Element]]:
         """Each record page, with its kind, the URL of its list and the
         list's page."""
@@ -74,8 +92,14 @@ class BackLinkTests(SeededCase):
             with self.subTest(kind=kind):
                 back = self.back_link(root)
                 links = back.find_all("a")
-                self.assertEqual([a.get("href") for a in links],
-                                 [list_url])
+                key = self.selections()[kind]
+                self.assertEqual(len(links), 1)
+                href = links[0].get("href")
+                self.assertEqual(href.split("?")[0], list_url)
+                if key is None:
+                    self.assertEqual(href, list_url)
+                else:
+                    self.assertEqual(query_of(href).get("selected"), [key])
                 self.assertEqual(links[0].text(hidden),
                                  listing.find("h1").text())
                 self.assertNotEqual(listing.find("h1").text(), "")
@@ -86,7 +110,7 @@ class BackLinkTests(SeededCase):
                 self.assertTrue(back.text().startswith(ARROW))
                 self.assertEqual(
                     [a for a in root.find_all("a")
-                     if a.get("href") == list_url
+                     if urlsplit(a.get("href") or "").path == list_url
                      and not in_navigation(a)],
                     [links[0]])
 
@@ -113,6 +137,60 @@ class BackLinkTests(SeededCase):
         self.assertEqual(found["item"], "Endprodukte")
         self.assertEqual(found["substance"], "Substanzen")
         self.assertEqual(found["notebook"], "Laborjournale")
+
+    def test_the_addresses_name_the_record_in_selected(self) -> None:
+        """Requirement: Back links (the table of addresses)."""
+        wanted = {
+            "item": "/lab/inventory/end-products/?selected={}",
+            "batch": "/lab/inventory/batches/?selected={}",
+            "vessel": "/lab/inventory/vessels/?{}selected={}",
+            "delivery note": "/lab/inventory/deliveries/?selected={}",
+            "task": "/lab/tasks/?{}selected={}",
+            "substance": "/lab/registry/?selected={}",
+            "notebook": "/lab/journal/",
+        }
+        from inventory.models import Vessel
+        from tasks.models import Task
+        keys = self.selections()
+        # A list that hides the record by default is told to show it.
+        hidden = {
+            "task": "" if Task.objects.get(number=keys["task"]).active
+            else "state=all&",
+            "vessel": "" if Vessel.objects.get(pk=keys["vessel"]).amount
+            else "empty=1&",
+        }
+        for kind, url, _ in self.records():
+            with self.subTest(kind=kind):
+                link = self.back_link(self.get(url)).find("a")
+                args = ((hidden[kind], keys[kind]) if kind in hidden
+                        else (keys[kind],))
+                self.assertEqual(link.get("href"),
+                                 wanted[kind].format(*args))
+                self.assertIn("data-back", link.attrs)
+
+    def test_the_notebook_link_carries_no_selected(self) -> None:
+        from journal.models import Notebook
+        root = self.get(f"/lab/journal/{Notebook.objects.first().code}/")
+        href = self.back_link(root).find("a").get("href")
+        self.assertEqual(href, "/lab/journal/")
+        self.assertEqual(query_of(href), {})
+
+    def test_each_list_selects_the_record_its_back_link_names(
+            self) -> None:
+        """Scenario: Back links match their lists (each list page
+        selects the record its back link names)."""
+        for kind, root, _, _ in self.pages():
+            link = self.back_link(root).find("a")
+            names = query_of(link.get("href")).get("selected")
+            if kind == "notebook":
+                self.assertIsNone(names)
+                continue
+            with self.subTest(kind=kind):
+                self.assertEqual(len(names), 1)
+                listing = self.get(link.get("href"))
+                self.assertEqual(marked(listing), names)
+                self.assertEqual(must_pane(listing).get("data-item"),
+                                 names[0])
 
     def test_the_back_link_stands_after_the_demo_note(self) -> None:
         """Requirement: Back links (after the notices of the page

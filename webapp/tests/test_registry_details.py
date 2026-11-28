@@ -17,6 +17,7 @@ from .main_lists_support import (body_of, cells, has_ancestor_class,
                                  unsorted_reasons)
 from .structure_support import ETHANOL
 from .test_inventory_dialogs import current
+from .widget_support import title_of
 
 REGISTRY = "/lab/registry/"
 OPEN_PAGE = "Substanzseite öffnen"
@@ -261,6 +262,39 @@ class HeadAndWidgetsTests(SubstanceDetailsCase):
             self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
         for grid in record_tables(found):
             self.assertIsNotNone(has_ancestor_class(grid, "widget"))
+
+    def test_the_compound_comes_first_and_the_records_follow_beside_it(
+            self) -> None:
+        """The widget grid of the pane holds the compound widget first,
+        then one column of the containers, batches and tasks."""
+        self.acid()
+        found = self.details("cinnamic-acid")
+        grid = found.find(cls="widget-grid")
+        self.assertIsNotNone(grid, "the pane has no widget grid")
+        kids = [kid for kid in grid.children if isinstance(kid, Element)]
+        self.assertEqual(len(kids), 2)
+        compound, column = kids
+        self.assertEqual(compound.tag, "section")
+        self.assertIn("widget", compound.classes)
+        self.assertEqual(title_of(compound), "Verbindung")
+        self.assertIn("widget-grid__col", column.classes)
+        self.assertEqual(
+            [title_of(each) for each in column.find_all(cls="widget")],
+            ["Gebinde", "Chargen", "Aufgaben"])
+        self.assertEqual(
+            [title_of(each) for each in pane_widgets(found)],
+            ["Verbindung", "Gebinde", "Chargen", "Aufgaben"])
+
+    def test_the_compound_is_not_in_the_records_column(self) -> None:
+        self.acid()
+        found = self.details("cinnamic-acid")
+        column = found.find(cls="widget-grid__col")
+        self.assertIsNotNone(column)
+        self.assertEqual(
+            [each for each in column.find_all(cls="widget")
+             if title_of(each) == "Verbindung"], [])
+        self.assertIsNone(column.find(cls="kv-table"))
+        self.assertIsNone(column.find(cls="structure"))
 
 
 class EndpointTests(SubstanceDetailsCase):

@@ -424,12 +424,13 @@ class BulkDetailTests(BulkCase):
                 self.assertEqual(layout.get("data-view"), want)
                 radios = {r.get("id"): r for r in root.find_all(
                     "input", type="radio", name="view")}
-                self.assertEqual(sorted(radios),
-                                 ["view-details", "view-table"])
                 self.assertEqual(
-                    [name for name, r in radios.items()
+                    sorted(radios),
+                    ["view-details", "view-details-wide", "view-table"])
+                self.assertEqual(
+                    [r.get("value") for r in radios.values()
                      if "checked" in r.attrs],
-                    [f"view-{want}"])
+                    [want])
         for view in VIEWS:
             for query, target in (
                     ("", first),

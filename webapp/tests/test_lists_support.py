@@ -123,9 +123,10 @@ class CottonPartialCompatibilityTests(SimpleTestCase):
                 self.assertIn("split--columns", layout.classes)
                 self.assertNotIn("split--rows", layout.classes)
                 self.assertEqual(layout.get("data-major"), "second")
-                self.assertIn("split", (layout.get("data-controller")
-                                        or "").split())
-                self.assertEqual(layout.get("data-split-cookie-value"),
+                self.assertNotIn("split", (layout.get("data-controller")
+                                           or "").split())
+                self.assertIsNone(layout.get("data-split-cookie-value"))
+                self.assertEqual(layout.get("data-split-cookie"),
                                  "probe-cookie")
                 panes = [child for child in layout.children
                          if isinstance(child, Element)]
