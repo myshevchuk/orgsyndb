@@ -620,9 +620,6 @@ msgctxt "item list"
 msgid "Delivered"
 msgstr "Abgegeben"
 
-msgid "Bulk available"
-msgstr "Bulk verfügbar"
-
 msgid "%(column)s descending, %(rest)s ascending"
 msgstr "%(column)s absteigend, %(rest)s aufsteigend"
 
@@ -1102,9 +1099,6 @@ msgstr "Letzte Buchungen"
 
 msgid "No vessel is chosen."
 msgstr "Kein Gefäß ist gewählt."
-
-msgid "Contents"
-msgstr "Inhalt"
 
 msgid "Open delivery note"
 msgstr "Lieferschein öffnen"

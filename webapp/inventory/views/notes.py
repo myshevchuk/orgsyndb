@@ -31,12 +31,11 @@ NOTE_COLUMNS: tuple[SortColumn, ...] = (
                lambda note: sort_value(note.recipient)),
     SortColumn("lines", gettext_lazy("Lines"),
                lambda note: sort_value(note.line_count)),
-    SortColumn("contents", gettext_lazy("Contents"), sortable=False),
 )
 NOTE_CLASSES = {
     "number": "col-strong",
     "recipient": "col-strong",
-    "lines": "number table-only-summary",
+    "lines": "number",
 }
 
 

@@ -1041,12 +1041,11 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 /* On screen, the item list's box scrolls both ways, at most the window's
    height, and keeps the header rows at its top and the first column at
    its left. The row of the selected item is marked and a click chooses
-   a row, in both views. The details view drops the table view's columns
-   and shows the selected item's details beside the table, below it in a
-   narrow window. lab.js marks the layout data-scripted and keeps its
-   data-view; until then, and without the script, the layout follows the
-   radio buttons of the switch. Paper keeps print.css's whole table
-   without the details. */
+   a row, in both views. The details view shows the selected item's
+   details beside the table, below it in a narrow window. lab.js marks
+   the layout data-scripted and keeps its data-view; until then, and
+   without the script, the layout follows the radio buttons of the
+   switch. Paper keeps print.css's whole table without the details. */
 @media screen {
   .table-scroll.table-sticky { overflow: auto; max-height: calc(100vh - 4rem); }
   .table-sticky thead { position: sticky; top: 0; z-index: 2; }
@@ -1217,28 +1216,6 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
       body.lab-frame main:has(#view-details:checked) .item-layout:not(.item-layout--split):not([data-scripted]) {
         grid-template-columns: fit-content(calc(100% - 25rem - 0.75rem)) minmax(25rem, 1fr);
       }
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines {
-      display: block;
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      max-width: 16rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--muted);
-      font-size: 0.75rem;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines li,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines li {
-      display: inline;
-      margin: 0;
-    }
-    body.lab-frame .item-layout[data-scripted][data-view="details"] .note-table .note-lines li + li::before,
-    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .note-table .note-lines li + li::before {
-      content: ", ";
     }
   }
 

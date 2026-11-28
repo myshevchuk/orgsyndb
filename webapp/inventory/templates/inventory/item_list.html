@@ -76,6 +76,7 @@
 {% endif %}<h3>{% translate "Finished containers" %}</h3>
 <dl class="detail-location"><dt>{% translate "Compartment" %}</dt><dd>{{ item.compartment|default:missing }}</dd><dt>{% translate "Box" %}</dt><dd>{{ item.box|default:missing }}</dd></dl>
 {% if bulk.vessels %}<h3>{% translate "Bulk, stored separately" %}</h3>
+<p class="detail-note">{% include "inventory/bulk.html" %}</p>
 <ul class="detail-lots">
 {% for vessel in bulk.vessels %}<li><strong>{% if vessel.location %}{{ vessel.location }}{% elif vessel.flask %}{% translate "Flask" %}{% else %}{{ missing }}{% endif %}</strong> <a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a> · {{ vessel.amount|in_vessel_unit:vessel }}</li>
 {% endfor %}</ul>
@@ -118,6 +119,6 @@
 {% elif column.key == "coverage" %}<td class="{{ column.classes }}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
 {% elif column.key == "compartment" %}<td class="{{ column.classes }}">{{ item.compartment }}</td>
 {% elif column.key == "box" %}<td class="{{ column.classes }}">{{ item.box }}</td>
-{% elif column.key == "bulk" %}<td class="{{ column.classes }}">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
+{% elif column.key == "bulk" %}<td class="{{ column.classes }}">{% for amount, unit in row.bulk.amounts %}{{ amount|decimal }} {{ unit }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>
 {% endif %}{% endwith %}{% endpartialdef %}
 {% endblock %}

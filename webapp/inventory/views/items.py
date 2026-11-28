@@ -37,7 +37,7 @@ from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     item_url, layers, list_view, open_vessels,
                                     pick_selected, render_form, saved, tabs)
 from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
-                                htmx_list_push_url, sort_value)
+                                htmx_list_push_url, pairs_sort_key, sort_value)
 from planning import plan
 
 
@@ -133,8 +133,8 @@ COLUMN_MODEL: tuple[ColumnSpec, ...] = (
                lambda row: sort_value(row.item.compartment)),
     ColumnSpec("box", gettext_lazy("Box"), "", False,
                lambda row: sort_value(row.item.box)),
-    ColumnSpec("bulk", gettext_lazy("Bulk available"), "", False,
-               lambda row: row.bulk.containers if row.bulk.vessels else None),
+    ColumnSpec("bulk", gettext_lazy("Bulk"), "", False,
+               lambda row: pairs_sort_key(row.bulk.amounts)),
 )
 SORT_COLUMNS: tuple[SortColumn, ...] = tuple(
     SortColumn(spec.key, spec.label, spec.value) for spec in COLUMN_MODEL

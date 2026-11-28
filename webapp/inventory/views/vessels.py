@@ -21,11 +21,10 @@ from inventory.forms import (NewVesselForm, TransferForm,
                              WithdrawalForm)
 from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
-from inventory.views.common import (VESSEL_COOKIE, VESSELS, batch_source_text,
-                                    batch_url, form_page,
-                                    htmx_detail_or_redirect, item_form,
-                                    list_view, locations, pick_selected, saved,
-                                    tabs, vessel_url)
+from inventory.views.common import (VESSEL_COOKIE, VESSELS, batch_url,
+                                    form_page, htmx_detail_or_redirect,
+                                    item_form, list_view, locations,
+                                    pick_selected, saved, tabs, vessel_url)
 from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
                                 clean_choice, htmx_list_push_url, sort_value)
 
@@ -35,10 +34,12 @@ def _vessel_amount_sort(vessel: Vessel) -> Any:
     return amount_sort_key(vessel.amount, base_unit)
 
 
-def _vessel_opened_sort(vessel: Vessel) -> Any:
-    if vessel.batch.source != "bought":
-        return None
-    return sort_value(vessel.opened_on if vessel.opened_on else _("sealed"))
+def _vessel_source_text(batch: Batch) -> str:
+    if batch.source == "made" and batch.task_step_id is not None:
+        return batch.task_step.task.number
+    if batch.source == "bought" and batch.supplier:
+        return batch.supplier
+    return ""
 
 
 VESSEL_COLUMNS: tuple[SortColumn, ...] = (
@@ -46,22 +47,19 @@ VESSEL_COLUMNS: tuple[SortColumn, ...] = (
                lambda v: sort_value(f"#{v.pk}")),
     SortColumn("name", gettext_lazy("Name"),
                lambda v: sort_value(v.batch.substance.shown_name)),
-    SortColumn("article", gettext_lazy("Article no."),
-               lambda v: sort_value(v.article_number)),
     SortColumn("kind", gettext_lazy("Kind"),
                lambda v: sort_value(v.kind_label)),
     SortColumn("batch", gettext_lazy("Batch"),
                lambda v: sort_value(str(v.batch))),
     SortColumn("source", gettext_lazy("Source"),
-               lambda v: sort_value(batch_source_text(v.batch))),
+               lambda v: sort_value(_vessel_source_text(v.batch))),
     SortColumn("amount", gettext_lazy("Amount"), _vessel_amount_sort),
     SortColumn("location", gettext_lazy("Location"),
                lambda v: sort_value(v.location)),
     SortColumn("date", gettext_lazy("Date"),
                lambda v: sort_value(v.batch.date)),
-    SortColumn("opened", gettext_lazy("Opened"), _vessel_opened_sort),
 )
-VESSEL_CLASSES = {"name": "col-strong col-name", "amount": "number col-strong"}
+VESSEL_CLASSES = {"name": "col-strong", "amount": "number col-strong"}
 
 
 @dataclass(frozen=True)
