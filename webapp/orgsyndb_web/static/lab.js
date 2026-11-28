@@ -732,10 +732,14 @@
         sortTable(this.element, colIndex, descending);
       };
       this.element.addEventListener("click", this._onClick);
+      // A morph keeps the table but drops its script-added buttons.
+      this._onSettle = () => enhanceSortable(this.element);
+      document.addEventListener("htmx:afterSettle", this._onSettle);
     }
 
     disconnect() {
       this.element.removeEventListener("click", this._onClick);
+      document.removeEventListener("htmx:afterSettle", this._onSettle);
     }
   }
 

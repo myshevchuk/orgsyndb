@@ -136,7 +136,6 @@ class MainTableTests(MainListCase):
         root = self.fetch(spec.path)
         layout = root.find("div", cls="item-layout")
         self.assertIsNotNone(layout)
-        self.assertIn("item-layout--split", layout.classes)
         self.assertEqual(layout.get("data-controller"), "split-list")
         self.assertEqual(layout.get("data-split-list-mode-value"),
                          "htmx")

@@ -1,5 +1,6 @@
 """The planning list and article details pane."""
 
+import math
 from typing import Any
 from urllib.parse import urlencode
 
@@ -25,13 +26,19 @@ SHOW_CHOICES = (
 )
 SHOW_VALUES = {"high", "action", "late"}
 
+
+def _whole_days(value: float | None) -> int | None:
+    """Return VALUE in whole days rounded down, as the list shows it;
+    None for None."""
+    return None if value is None else math.floor(value)
+
 PLANNING_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("article", gettext_lazy("Article"),
                lambda row: sort_value(row.forecast.substance.shown_name)),
     SortColumn("runway", gettext_lazy("Runway"),
-               lambda row: row.forecast.runway),
+               lambda row: _whole_days(row.forecast.runway)),
     SortColumn("synthesis", gettext_lazy("Synthesis time"),
-               lambda row: row.forecast.synthesis_days),
+               lambda row: _whole_days(row.forecast.synthesis_days)),
     SortColumn("start", gettext_lazy("Latest start"),
                lambda row: sort_value(row.forecast.latest_start)),
     SortColumn("priority", gettext_lazy("Priority"),

@@ -14,9 +14,10 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 T = TypeVar("T")
 
-_NUMBER_RE = re.compile(r"\A[+-]?\d+(?:[.,]\d+)?\Z")
+_NUMBER_RE = re.compile(r"\A[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)\Z")
 _AMOUNT_RE = re.compile(
-    r"\A([+-]?\d+(?:[.,]\d+)?)\s*(kg|g|mg|µg|ug|mol|mmol|µmol|umol)\Z"
+    r"\A([+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+))\s*"
+    r"(kg|g|mg|µg|ug|mol|mmol|µmol|umol)\Z"
 )
 _ISO_DATE_RE = re.compile(
     r"\A(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?\Z"
@@ -211,7 +212,7 @@ def _natural_parts(text: str) -> tuple[tuple[int, Any], ...]:
     for piece in _DIGIT_RUN_RE.split(text.casefold()):
         if not piece:
             continue
-        if piece.isdigit():
+        if piece.isdecimal():
             parts.append((0, int(piece)))
         else:
             parts.append((1, piece))

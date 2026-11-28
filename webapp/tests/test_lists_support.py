@@ -415,6 +415,13 @@ class SortValueTests(SimpleTestCase):
             with self.subTest(low=low, high=high):
                 self.assertEqual(ordered([high, low]), [low, high])
 
+    def test_other_digit_characters_are_text(self) -> None:
+        self.assertEqual(ordered(["2²", "2"]), ["2", "2²"])
+
+    def test_a_number_may_start_with_its_separator(self) -> None:
+        self.assertEqual(ordered(["0.6", ".5", ",4", "0,55 mg", ".5 mg"]),
+                         [",4", ".5", "0.6", ".5 mg", "0,55 mg"])
+
     def test_digits_in_the_middle_of_text(self) -> None:
         self.assertEqual(
             ordered(["Box 10b", "Box 2c", "Box 2a", "box 1"]),

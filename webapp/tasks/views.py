@@ -68,8 +68,7 @@ TASK_COLUMNS: tuple[SortColumn, ...] = (
                lambda row: sort_value(row[0].ended)),
     SortColumn("progress", gettext_lazy("Progress"), _progress_sort),
     SortColumn("batch", gettext_lazy("Batch"),
-               lambda row: sort_value(
-                   row[2].split(", ")[0] if row[2] else "")),
+               lambda row: sort_value(_first_product_number(row[0]))),
     SortColumn("report", gettext_lazy("Report"),
                lambda row: sort_value(
                    str(_("yes")) if row[0].report else str(_("no")))),
@@ -171,6 +170,13 @@ def product_numbers(task: Task) -> str:
     ``, ``; the steps and their batches are read as prefetched."""
     return ", ".join(batch.number for batch in made_batches(task)
                      if batch.substance_id == task.substance_id)
+
+
+def _first_product_number(task: Task) -> str:
+    """Return the number of the first product batch of TASK, as
+    ``product_numbers`` orders them, or ``""`` when it has none."""
+    return next((batch.number for batch in made_batches(task)
+                 if batch.substance_id == task.substance_id), "")
 
 
 def selected(tasks: list[Task], filters: Filters,

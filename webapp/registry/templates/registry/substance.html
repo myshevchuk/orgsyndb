@@ -41,7 +41,7 @@
 <thead><tr><th scope="col">{% translate "Article / size" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
 <tbody>
 {% for item in items %}<tr>
-<td><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
+<td data-sort="{{ item|container_sort }}"><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
 <td class="num" data-sort="{{ item.quantity }}">{% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</td>
 </tr>
 {% endfor %}</tbody>
