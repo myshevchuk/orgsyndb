@@ -8,8 +8,10 @@ from typing import Any
 from tasks.models import Task
 
 from . import Element, make_task, page, past
-from .main_lists_support import (HTMX, body_of, cells, headers_of, heading_of,
-                                 link_in, must_pane, replaced, row_for,
+from .main_lists_support import (body_of, cells, has_ancestor_class,
+                                 headers_of, heading_of, HTMX, link_in,
+                                 must_pane, pane_head, pane_widgets,
+                                 record_tables, replaced, row_for,
                                  texts_of_links, unsorted_reasons)
 from .task_support import StepCase, make_product_batch, steps_of
 from .test_inventory_dialogs import current
@@ -53,6 +55,25 @@ class TaskDetailsCase(StepCase):
         self.assertEqual(len(grids), 1, "the pane has no steps table")
         return [[cell.text() for cell in cells(row)]
                 for row in body_of(grids[0])]
+
+
+class HeadAndWidgetsTests(TaskDetailsCase):
+
+    def test_the_head_titles_the_task_and_the_data_is_in_widgets(
+            self) -> None:
+        task = self.sequenced()
+        found = self.details(task)
+        head = pane_head(found)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"),
+                         f"{TASKS}{task.number}/")
+        self.assertTrue(pane_widgets(found))
+        for each in pane_widgets(found):
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(found):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
 
 
 class DetailsOfATaskTests(TaskDetailsCase):
@@ -119,7 +140,7 @@ class DetailsOfATaskTests(TaskDetailsCase):
         task = make_task(self.kl, "Aspirin")
         found = self.details(task)
         self.assertGreaterEqual(found.text().count("–"), 4)
-        self.assertEqual(found.find_all("table"), [])
+        self.assertEqual(record_tables(found), [])
 
     def test_the_product_batches_link_their_pages(self) -> None:
         task = make_task(self.kl, "Aspirin", steps=1)
@@ -130,7 +151,7 @@ class DetailsOfATaskTests(TaskDetailsCase):
 
     def test_a_task_without_steps_has_no_steps_table(self) -> None:
         task = make_task(self.kl, "Aspirin")
-        self.assertEqual(self.details(task).find_all("table"), [])
+        self.assertEqual(record_tables(self.details(task)), [])
 
     def test_a_step_without_an_entry_has_its_position_alone(self) -> None:
         task = make_task(self.kl, "Aspirin", steps=2, done=1,

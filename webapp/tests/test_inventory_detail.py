@@ -23,8 +23,11 @@ from .inventory_support import (
     item_url,
     vessel_url,
 )
-from .main_lists_support import projected_marks
+from .main_lists_support import (has_ancestor_class, must_outer_split,
+                                 pane_head, pane_widgets, projected_marks,
+                                 split_panes)
 from .test_inventory_table import body_rows
+from .widget_support import grid, kv
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
 COOKIE = "item-list-view"
@@ -54,14 +57,19 @@ def chosen_rows(root: Element) -> list[Element]:
 
 
 def definition(pane: Element, term: str) -> Element | None:
-    """The ``dd`` that follows the ``dt`` ``term`` in the pane."""
-    for dt in pane.find_all("dt"):
-        if dt.text() == term:
-            siblings = dt.parent.children
-            for node in siblings[siblings.index(dt) + 1:]:
-                if isinstance(node, Element) and node.tag == "dd":
-                    return node
-    return None
+    """The value cell of the row ``term`` of a key-value table in the
+    pane's widgets."""
+    return kv(pane).get(term)
+
+
+def consumption(pane: Element) -> tuple[list[str], list[dict[str, Element]]]:
+    """The header and the rows of the consumption table of the pane,
+    the one whose first column is the year."""
+    for found in pane.find_all("table"):
+        first = found.find(("th", "td"))
+        if first is not None and first.text() == "Jahr":
+            return grid(found)
+    raise AssertionError("the pane has no consumption table")
 
 
 def links(pane: Element) -> dict[str, str]:
@@ -152,7 +160,7 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertEqual(len(shown), 1)
         self.assertIn("B-7", shown[0].text())
         self.assertTrue(has_amount(text, "50", "mg"), text)
-        header, years = table(pane)
+        header, years = consumption(pane)
         self.assertEqual(header, ["Jahr", "Q1", "Q2", "Q3", "Q4", "Summe"])
         self.assertEqual([[cell.text() for cell in year.values()]
                           for year in years],
@@ -184,7 +192,7 @@ class DetailsOfAnItemTests(DetailCase):
         self.enter(item, 2026, 1, 3)
         with ticking(berlin(2026, 5, 4, 8)):
             pane = self.listed(item)
-        _, years = table(pane)
+        _, years = consumption(pane)
         self.assertEqual([cell.text() for cell in years[2].values()],
                          ["2026", "3", "0", "", "", "3"])
         bars = pane.find_all(cls="quarter-bar")
@@ -299,6 +307,74 @@ class DetailsOfAnItemTests(DetailCase):
                       self.listed(item).text())
 
 
+class PaneHeadAndWidgetTests(DetailCase):
+    """The pane is a head and widgets (web-app: Main lists, Views)."""
+
+    def test_the_head_titles_the_item_and_links_to_its_page(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012", "(E)-Zimtsäure", "100", "mg")
+        pane = self.listed(item)
+        head = pane_head(pane)
+        self.assertIsNotNone(head)
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title)
+        self.assertEqual(title.find("a").get("href"), item_url(item))
+
+    def test_the_data_is_in_widgets_in_a_grid(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012", compartment="2", box="7", note="Kühl")
+        self.vessel("CH-0012", "mg", "50")
+        pane = self.listed(item)
+        found = pane_widgets(pane)
+        self.assertTrue(found)
+        for each in found:
+            head = each.find(cls="widget__head")
+            self.assertIsNotNone(head.find("h3"), head.text())
+            self.assertIsNone(head.find("h2"))
+            self.assertIsNotNone(has_ancestor_class(each, "widget-grid"))
+        for name in ("detail-figures", "detail-location", "detail-lots"):
+            self.assertEqual(pane.find_all(cls=name), [], name)
+        for term in ("Fach", "Box"):
+            self.assertIn(term, kv(pane))
+
+    def test_the_quarters_table_is_in_a_widget(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012")
+        self.enter(item, 2026, 1, 3)
+        pane = self.listed(item)
+        found = [each for each in pane_widgets(pane)
+                 if "Jahr" in {th.text() for th in each.find_all("th")}]
+        self.assertEqual(len(found), 1)
+
+    def test_secondary_actions_are_in_a_popover_of_the_head(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012")
+        self.deliver(item, 1)
+        self.client.force_login(self.kl)
+        pane = self.listed(item)
+        head = pane_head(pane)
+        menu = pane.find(id="item-actions")
+        self.assertIsNotNone(menu)
+        self.assertIn("popover", menu.attrs)
+        opener = pane.find("button", attrs={"popovertarget": "item-actions"})
+        self.assertIsNotNone(opener)
+        self.assertIn(opener, list(head.walk()))
+        self.assertEqual(len(pane.find_all(id="item-actions")), 1)
+        self.assertIn(item_url(item, "edit"),
+                      [a.get("href") for a in menu.find_all("a")])
+        for action in ACTIONS:
+            for link in pane.find_all("a"):
+                if link.text() == action:
+                    self.assertIn(link, list(head.walk()), action)
+
+    def test_a_visitor_has_no_action_links_in_the_head(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012")
+        pane = self.listed(item)
+        self.assertEqual({a.text() for a in pane.find_all("a")}
+                         & set(ACTIONS), set())
+
+
 class ChosenItemTests(DetailCase):
 
     def test_the_first_item_selected(self) -> None:
@@ -377,8 +453,10 @@ class ChosenItemTests(DetailCase):
         for view in VIEWS:
             with self.subTest(view=view):
                 root = self.listing(f"?selected={second.pk}", view)
-                layout = root.find(cls="item-layout")
-                self.assertIs(pane_of(root).closest("div"), layout)
+                layout = must_outer_split(root)
+                self.assertIs(
+                    has_ancestor_class(pane_of(root), "split__pane"),
+                    split_panes(layout)[1])
                 self.assertIn("A-2", pane_of(root).text())
 
     def test_detail_is_no_longer_read(self) -> None:

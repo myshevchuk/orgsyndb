@@ -48,8 +48,13 @@ from .inventory_support import (
     vessel_url,
 )
 from .journal_support import entry_of, make_notebook
-from .main_lists_support import strong_columns
-from .test_inventory_detail import chosen_rows, pane_of
+from .main_lists_support import (LOT_TABLE, has_ancestor_class, lot_keys,
+                                 lot_marked, lot_pane, lot_rows, marked,
+                                 must_outer_split, pane_head, pane_widgets,
+                                 path_of, query_of, replaced, split_panes,
+                                 strong_columns)
+from .test_inventory_detail import pane_of
+from .widget_support import grid
 from .test_inventory_dialogs import (
     HTMX,
     LOGIN,
@@ -71,15 +76,15 @@ CHEMICAL_COOKIE = "chemical-list-view"
 VIEWS = (None, "table", "details")
 VESSEL_ACTIONS = ("Entnahme", "Umfüllen", "Korrigieren", "Bearbeiten")
 DETAIL_COLS_INT_DE = [
-    "Gefäß", "Charge", "Menge", "Ort", "Herkunft", "Datum", "Bemerkung"]
+    "Gefäß", "Charge", "Menge", "Ort", "Herkunft", "Datum"]
 DETAIL_COLS_INT_EN = [
-    "Vessel", "Batch", "Amount", "Location", "Source", "Date", "Note"]
+    "Vessel", "Batch", "Amount", "Location", "Source", "Date"]
 DETAIL_COLS_CHEM_DE = [
     "Gefäß", "Charge", "Menge", "Ort", "Herkunft", "Datum",
-    "Angebrochen am", "Bemerkung"]
+    "Angebrochen am"]
 DETAIL_COLS_CHEM_EN = [
     "Vessel", "Batch", "Amount", "Location", "Source", "Date",
-    "Opened on", "Note"]
+    "Opened on"]
 
 
 def detail_url(base: str, key: str, query: str = "") -> str:
@@ -104,8 +109,21 @@ def row_map(root: Element) -> dict[str, dict[str, Element]]:
 
 
 def detail_table(pane: Element) -> tuple[list[str], list[dict[str, Element]]]:
-    """The first table inside ``#item-detail``, the vessel table."""
-    return table(pane)
+    """The lot table inside ``#item-detail``, a table of vessels."""
+    found = pane.find("table", id=LOT_TABLE)
+    assert found is not None, "the pane has no lot table"
+    return grid(found)
+
+
+def lot_ids(root: Element) -> list[str]:
+    """The vessel ids of the lot table's rows, in order."""
+    return lot_keys(root)
+
+
+def outer_marked(root: Element) -> list[str]:
+    """The ``data-item`` of the marked rows of the list's own table,
+    leaving out the lot table's."""
+    return marked(root)
 
 
 class StockCategoryTests(InventoryCase):
@@ -904,8 +922,7 @@ class CategoryViewAndDetailsTests(InventoryCase):
                     else:
                         self.client.cookies[cookie] = val
                     root = page(self.client.get(path))
-                    layout = root.find(cls="item-layout")
-                    self.assertIsNotNone(layout)
+                    layout = must_outer_split(root)
                     self.assertEqual(layout.get("data-view"), want)
                     radios = {r.get("id"): r for r in root.find_all(
                         "input", type="radio", name="view")}
@@ -928,9 +945,7 @@ class CategoryViewAndDetailsTests(InventoryCase):
                         ("?q=beta&selected=alpha", "beta")):
                     with self.subTest(path=path, view=view, query=query):
                         root = page(self.client.get(path + query))
-                        marked = chosen_rows(root)
-                        self.assertEqual(
-                            [m.get("data-item") for m in marked], [want_key])
+                        self.assertEqual(outer_marked(root), [want_key])
                         pane = pane_of(root)
                         self.assertEqual(pane.get("data-item"), want_key)
                         self.assertEqual(
@@ -938,7 +953,7 @@ class CategoryViewAndDetailsTests(InventoryCase):
 
                 empty_root = page(self.client.get(
                     f"{path}?q=no-such&selected=alpha"))
-                self.assertEqual(chosen_rows(empty_root), [])
+                self.assertEqual(outer_marked(empty_root), [])
                 self.assertIsNone(pane_of(empty_root).get("data-item"))
                 self.assertIsNone(field_value(empty_root, "selected"))
 
@@ -972,12 +987,19 @@ class CategoryViewAndDetailsTests(InventoryCase):
         self.assertEqual(flask_row["Ort"].text(), "Kolben")
         self.assertIn("T-021", flask_row["Herkunft"].text())
 
-        for row in rows:
-            actions = {a.text(): a for a in row[header[-1]].closest("tr")
-                       .find_all("a") if a.text() in VESSEL_ACTIONS}
-            self.assertEqual(set(actions), set(VESSEL_ACTIONS))
-            for link in actions.values():
-                self.assertIn("data-dialog", link.attrs)
+        # The first vessel of the table is the selected lot, and its
+        # details, not its row, offer the actions.
+        self.assertEqual(lot_marked(root), [lot_ids(root)[0]])
+        self.assertEqual(lot_pane(root).get("data-item"), lot_ids(root)[0])
+        for row in lot_rows(root):
+            self.assertEqual(
+                [a for a in row.find_all("a") if "data-dialog" in a.attrs],
+                [])
+        actions = {a.text(): a for a in lot_pane(root).find_all("a")
+                   if a.text() in VESSEL_ACTIONS}
+        self.assertEqual(set(actions), set(VESSEL_ACTIONS))
+        for link in actions.values():
+            self.assertIn("data-dialog", link.attrs)
 
         new_batch = pane.find(
             "a", href=f"{NEW_BATCH}?substance=acetophenone")
@@ -998,14 +1020,20 @@ class CategoryViewAndDetailsTests(InventoryCase):
                  date=date(2026, 10, 2))
 
         self.client.cookies[CHEMICAL_COOKIE] = "details"
-        pane = pane_of(page(self.client.get(
-            f"{CHEMICALS}?selected=benzaldehyde")))
-        text = pane.text()
+        root = page(self.client.get(
+            f"{CHEMICALS}?selected=benzaldehyde"))
+        self.assertEqual(lot_ids(root), [str(vessel.pk)])
+        self.assertEqual(lot_marked(root), [str(vessel.pk)])
+        details = lot_pane(root)
+        self.assertEqual(details.get("data-item"), str(vessel.pk))
+        text = details.text()
         self.assertIn("Anfangsmenge", text)
         self.assertIn("Entnahme", text)
         self.assertLess(text.index("75"), text.index("90"))
         self.assertLess(text.index("90"), text.index("100"))
-        self.assertIsNotNone(pane.find("a", href=vessel_url(vessel)))
+        self.assertIsNotNone(details.find("a", href=vessel_url(vessel)))
+        self.assertIsNone(root.find(id="category-detail-movements"))
+        self.assertEqual(root.find_all(cls="split-movements-head"), [])
 
     def test_details_fragment_behavior_and_filter_propagation(self) -> None:
         """Requirement: Lists by substance (details endpoint HTMX fragment,
@@ -1041,6 +1069,8 @@ class CategoryViewAndDetailsTests(InventoryCase):
                          "acetophenone")
         self.assertIn(f"#{v.pk}", frag_root.text())
         self.assertIn("hx-request", vary_of(frag))
+        self.assertEqual(lot_ids(frag_root), [str(v.pk)])
+        self.assertEqual(lot_pane(frag_root).get("data-item"), str(v.pk))
 
         plain = self.client.get(detail_url(INTERMEDIATES, "acetophenone"))
         self.assertIn(plain.status_code, (302, 303))
@@ -1095,14 +1125,19 @@ class CategoryViewAndDetailsTests(InventoryCase):
                              note="kühl")
 
         # Anonymous sees no actions and no heading batch link.
-        anon_int = pane_of(page(self.client.get(INTERMEDIATES)))
+        anon_root = page(self.client.get(INTERMEDIATES))
+        anon_int = pane_of(anon_root)
         self.assertIsNone(
             anon_int.find("a", href=f"{NEW_BATCH}?substance=acetophenone"))
         for action in VESSEL_ACTIONS:
             self.assertNotIn(action, anon_int.text())
+        self.assertEqual(
+            [a for a in anon_int.find_all("a") if "data-dialog" in a.attrs],
+            [])
 
         self.client.force_login(self.kl)
-        int_pane = pane_of(page(self.client.get(INTERMEDIATES)))
+        int_root = page(self.client.get(INTERMEDIATES))
+        int_pane = pane_of(int_root)
         self.assertIsNotNone(int_pane.find(
             "a", href="/lab/registry/substances/acetophenone/"))
         int_head, int_rows = detail_table(int_pane)
@@ -1123,7 +1158,14 @@ class CategoryViewAndDetailsTests(InventoryCase):
             [a.get("href") for a in r_old["Herkunft"].find_all("a")],
             ["/lab/tasks/T-007/", "/lab/journal/AE-1/"])
         self.assertEqual(r_old["Datum"].text(), "05.01.2026")
-        self.assertEqual(r_old["Bemerkung"].text(), "alt")
+        self.assertNotIn("Bemerkung", int_head)
+        self.assertNotIn("alt", [cell.text() for cell in r_old.values()])
+        # The note is in the details of the lot, which is the first one.
+        self.assertEqual(lot_pane(int_root).get("data-item"), str(v_old.pk))
+        self.assertIn("alt", lot_pane(int_root).text())
+        for row in lot_rows(int_root):
+            self.assertEqual([a for a in row.find_all("a")
+                              if "data-dialog" in a.attrs], [])
 
         self.assertIn("ohne Auftrag", r_none["Herkunft"].text())
         self.assertIn("AE-1/9", r_none["Herkunft"].text())
@@ -1131,7 +1173,8 @@ class CategoryViewAndDetailsTests(InventoryCase):
             [a.get("href") for a in r_none["Herkunft"].find_all("a")],
             ["/lab/journal/AE-1/"])
 
-        chem_pane = pane_of(page(self.client.get(CHEMICALS)))
+        chem_root = page(self.client.get(CHEMICALS))
+        chem_pane = pane_of(chem_root)
         self.assertIsNotNone(chem_pane.find(
             "a", href=f"{NEW_BATCH}?substance=acetophenone&source=bought"))
         chem_head, chem_rows = detail_table(chem_pane)
@@ -1141,7 +1184,7 @@ class CategoryViewAndDetailsTests(InventoryCase):
         self.assertIn("Sigma", rc["Herkunft"].text())
         self.assertIn("S-999", rc["Herkunft"].text())
         self.assertEqual(rc["Angebrochen am"].text(), "versiegelt")
-        self.assertEqual(rc["Bemerkung"].text(), "kühl")
+        self.assertIn("kühl", lot_pane(chem_root).text())
         self.assertIsNotNone(rc["Gefäß"].find("a", href=vessel_url(v_chem)))
 
         accept(language="en")
@@ -1152,34 +1195,38 @@ class CategoryViewAndDetailsTests(InventoryCase):
             detail_table(pane_of(page(self.client.get(CHEMICALS))))[0],
             DETAIL_COLS_CHEM_EN)
 
-    def test_single_vessel_five_newest_movements_and_hidden_for_two(
-            self) -> None:
-        """Requirement: Lists by substance ("When the substance has a single
-        vessel there, the details also show that vessel's five newest
-        movements in booking order, newest first, as its page orders them,
-        with date, kind, amount, amount after, the user's initials and note,
-        and a link to the vessel's page.")."""
+    def test_the_lot_shows_its_five_newest_movements(self) -> None:
+        """Requirement: Lists by substance (the lot's details show "its
+        five newest movements"), whether the substance has one vessel or
+        several, and no block of movements stands apart from the lot's
+        details."""
         sub = make_substance("acetophenone", "Acetophenone")
         v1 = make_vessel(self.kl, substance=sub, unit="mg", amount="100")
         for n in range(1, 7):
             correct_vessel(self.kl, v1, amount=Decimal(str(100 - n)),
                            note=f"Bew-{n}")
 
-        pane = pane_of(page(self.client.get(INTERMEDIATES)))
-        text = pane.text()
-        self.assertIn("KL", text)
-        for n in range(2, 7):
-            self.assertIn(f"Bew-{n}", text)
-        self.assertNotIn("Bew-1", text)
-        self.assertNotIn("Anfangsmenge", text)
-        for newer, older in zip(("Bew-6", "Bew-5", "Bew-4", "Bew-3"),
-                                ("Bew-5", "Bew-4", "Bew-3", "Bew-2")):
-            self.assertLess(text.index(newer), text.index(older))
-
-        make_vessel(self.kl, substance=sub, unit="mg", amount="50")
-        two_pane = pane_of(page(self.client.get(INTERMEDIATES)))
-        self.assertNotIn("Bew-6", two_pane.text())
-
+        for second in (False, True):
+            with self.subTest(second_vessel=second):
+                if second:
+                    make_vessel(self.kl, substance=sub, unit="mg",
+                                amount="50")
+                root = page(self.client.get(INTERMEDIATES))
+                self.assertEqual(lot_marked(root), [str(v1.pk)])
+                text = lot_pane(root).text()
+                self.assertIn("KL", text)
+                for n in range(2, 7):
+                    self.assertIn(f"Bew-{n}", text)
+                self.assertNotIn("Bew-1", text)
+                self.assertNotIn("Anfangsmenge", text)
+                for newer, older in zip(("Bew-6", "Bew-5", "Bew-4",
+                                         "Bew-3"),
+                                        ("Bew-5", "Bew-4", "Bew-3",
+                                         "Bew-2")):
+                    self.assertLess(text.index(newer), text.index(older))
+                self.assertIsNone(root.find(id="category-detail-movements"))
+                self.assertEqual(root.find_all(cls="split-movements-head"),
+                                 [])
 
 class VesselDialogTests(FormCase):
 
@@ -1328,9 +1375,9 @@ class VesselDialogTests(FormCase):
         self.assertEqual(done.status_code, 204)
         self.assertIn("lab-saved", json.loads(done["HX-Trigger"]))
 
-        root = page(self.client.get(f"{INTERMEDIATES}?selected=acetophenone"))
-        self.assertEqual(
-            root.find(cls="item-layout").get("data-view"), "details")
+        root = page(self.client.get(
+            f"{INTERMEDIATES}?selected=acetophenone&lot={self.vessel.pk}"))
+        self.assertEqual(must_outer_split(root).get("data-view"), "details")
         rows = row_map(root)
         self.assertTrue(
             has_amount(rows["acetophenone"]["Menge"].text(), "10", "g"))
@@ -1338,6 +1385,10 @@ class VesselDialogTests(FormCase):
         self.assertEqual(pane.get("data-item"), "acetophenone")
         _, vrows = detail_table(pane)
         self.assertTrue(has_amount(vrows[0]["Menge"].text(), "10", "g"))
+        self.assertEqual(lot_marked(root), [str(self.vessel.pk)])
+        self.assertEqual(lot_pane(root).get("data-item"),
+                         str(self.vessel.pk))
+        self.assertTrue(has_amount(lot_pane(root).text(), "10", "g"))
 
     def test_the_last_admitted_bottle_opened(self) -> None:
         """Scenario: The last admitted bottle opened."""
@@ -1364,9 +1415,7 @@ class VesselDialogTests(FormCase):
         second_root = page(self.client.get(
             f"{CHEMICALS}?sealed=1&selected=benzaldehyde"))
         self.assertEqual(list(row_map(second_root)), ["toluene"])
-        self.assertEqual(
-            [r.get("data-item") for r in chosen_rows(second_root)],
-            ["toluene"])
+        self.assertEqual(outer_marked(second_root), ["toluene"])
         self.assertEqual(pane_of(second_root).get("data-item"), "toluene")
         self.assertEqual(field_value(second_root, "selected"), "toluene")
 
@@ -1378,5 +1427,522 @@ class VesselDialogTests(FormCase):
         third_root = page(self.client.get(
             f"{CHEMICALS}?sealed=1&selected=toluene"))
         self.assertEqual(row_map(third_root), {})
-        self.assertEqual(chosen_rows(third_root), [])
+        self.assertEqual(outer_marked(third_root), [])
         self.assertIsNone(pane_of(third_root).get("data-item"))
+
+
+# ---------------------------------------------------------------------------
+# The lots of a substance (end-product-inventory: Lists by substance)
+
+LOT_VALUES = {
+    "data-master-detail-level-value": "inner",
+    "data-master-detail-rows-value": "lot-rows",
+    "data-master-detail-pane-value": "lot-detail",
+    "data-master-detail-param-value": "lot",
+}
+
+
+def lot_url(base: str, key: str, vessel: Vessel) -> str:
+    return f"{base}{key}/lots/{vessel.pk}/"
+
+
+def single(root: Element) -> Element:
+    """The one element that a fragment holds."""
+    found = [c for c in root.children if isinstance(c, Element)]
+    assert len(found) == 1, f"{len(found)} elements"
+    return found[0]
+
+
+def ids_of(root: Element) -> list[str]:
+    return [e.get("id") for e in root.walk() if e.get("id")]
+
+
+class LotCase(InventoryCase):
+    """``acetophenone`` with three stored intermediate vessels in
+    ``Regal 1``, in the order of their ids, and ``benzaldehyde`` with two
+    sealed bottles."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.aceto = make_substance("acetophenone", "Acetophenone")
+        self.lots = [
+            make_vessel(self.kl, substance=self.aceto, unit="g",
+                        amount=str(n), location="Regal 1")
+            for n in (1, 2, 3)]
+        self.benz = make_substance("benzaldehyde", "Benzaldehyde")
+        self.bottles = [
+            make_vessel(self.kl, substance=self.benz, source="bought",
+                        unit="g", amount=str(n), supplier="Sigma")
+            for n in (10, 20)]
+
+    def listing(self, base: str = INTERMEDIATES, query: str = "",
+                signed_in: bool = False, **extra: Any) -> Element:
+        if signed_in:
+            self.client.force_login(self.kl)
+        self.client.cookies[INTERMEDIATE_COOKIE] = "details"
+        self.client.cookies[CHEMICAL_COOKIE] = "details"
+        response = self.client.get(base + query, **extra)
+        self.assertEqual(response.status_code, 200)
+        return page(response)
+
+
+class LotSplitTests(LotCase):
+    """The pane of a substance with vessels is a second split."""
+
+    def test_the_pane_holds_a_columns_split_of_the_lots(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        pane = pane_of(root)
+        splits = pane.find_all("div", cls="split")
+        self.assertEqual(len(splits), 1)
+        inner = splits[0]
+        self.assertIn("split--columns", inner.classes)
+        self.assertNotIn("split--outer", inner.classes)
+        self.assertEqual(inner.get("data-major"), "first")
+        self.assertEqual(inner.get("data-controller"), "master-detail")
+        for name, value in LOT_VALUES.items():
+            self.assertEqual(inner.get(name), value, name)
+        first, second = split_panes(inner)
+        grid_ = first.find("table", id=LOT_TABLE)
+        self.assertIsNotNone(grid_)
+        self.assertIsNotNone(second.find("aside", id="lot-detail"))
+
+    def test_the_lot_table_is_a_main_table_that_sorts(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        found = root.find_all("table", id=LOT_TABLE)
+        self.assertEqual(len(found), 1)
+        found = found[0]
+        self.assertIn("main-table", found.classes)
+        self.assertNotIn("aux-table", found.classes)
+        self.assertIn("data-sortable", found.attrs)
+        self.assertIn("sortable-table",
+                      (found.get("data-controller") or "").split())
+
+    def test_the_rows_ask_for_their_lot_and_the_body_takes_it(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        body = root.find("tbody", id="lot-rows")
+        self.assertIsNotNone(body)
+        self.assertEqual(
+            {name: body.get(name) for name in (
+                "hx-target", "hx-swap", "hx-sync", "hx-indicator")},
+            {"hx-target": "#lot-detail", "hx-swap": "outerHTML",
+             "hx-sync": "#main:replace", "hx-indicator": "#lot-detail"})
+        self.assertEqual(lot_ids(root), [str(v.pk) for v in self.lots])
+        for row, vessel in zip(lot_rows(root), self.lots):
+            self.assertEqual(
+                path_of(row.get("hx-get")),
+                lot_url(INTERMEDIATES, "acetophenone", vessel))
+            self.assertEqual(row.get("hx-trigger"), "item-select")
+
+    def test_one_lot_is_selected_and_its_details_are_shown(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        first = self.lots[0]
+        self.assertEqual(lot_marked(root), [str(first.pk)])
+        details = lot_pane(root)
+        self.assertEqual(details.tag, "aside")
+        self.assertEqual(details.get("data-item"), str(first.pk))
+
+    def test_the_lot_details_are_a_head_and_widgets(self) -> None:
+        self.client.force_login(self.kl)
+        root = self.listing(query="?selected=acetophenone")
+        details = lot_pane(root)
+        head = pane_head(details)
+        self.assertIsNotNone(head)
+        title = head.find("h2", id="lot-detail-title")
+        self.assertIsNotNone(title)
+        self.assertEqual(title.find("a").get("href"),
+                         vessel_url(self.lots[0]))
+        found = pane_widgets(details)
+        self.assertTrue(found)
+        for each in found:
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+            self.assertIsNotNone(has_ancestor_class(each, "widget-grid"))
+
+    def test_the_lot_actions_are_in_a_popover_for_a_signed_in_user(
+            self) -> None:
+        root = self.listing(query="?selected=acetophenone", signed_in=True)
+        details = lot_pane(root)
+        menu = details.find(id="lot-actions")
+        self.assertIsNotNone(menu)
+        self.assertIn("popover", menu.attrs)
+        opener = details.find("button",
+                              attrs={"popovertarget": "lot-actions"})
+        self.assertIsNotNone(opener)
+        self.assertIn(opener, list(pane_head(details).walk()))
+        links = {a.text(): a for a in details.find_all("a")
+                 if "data-dialog" in a.attrs}
+        self.assertLessEqual(set(VESSEL_ACTIONS), set(links))
+        self.assertIn(vessel_url(self.lots[0], "edit"),
+                      [a.get("href") for a in menu.find_all("a")])
+
+    def test_no_id_repeats_on_the_page(self) -> None:
+        for signed_in in (False, True):
+            for base, key in ((INTERMEDIATES, "acetophenone"),
+                              (CHEMICALS, "benzaldehyde")):
+                with self.subTest(base=base, signed_in=signed_in):
+                    root = self.listing(base, f"?selected={key}",
+                                        signed_in=signed_in)
+                    found = ids_of(root)
+                    self.assertEqual(
+                        sorted(i for i in set(found)
+                               if found.count(i) > 1), [])
+                    self.assertIn("lot-detail-title", found)
+                    self.assertIn("item-detail-title", found)
+                    if signed_in:
+                        self.assertIn("lot-actions", found)
+
+    def test_nothing_in_the_pane_but_the_pane_is_refreshed(self) -> None:
+        for signed_in in (False, True):
+            for base, key in ((INTERMEDIATES, "acetophenone"),
+                              (CHEMICALS, "benzaldehyde")):
+                with self.subTest(base=base, signed_in=signed_in):
+                    pane = pane_of(self.listing(base, f"?selected={key}",
+                                                signed_in=signed_in))
+                    self.assertIn("data-refresh", pane.attrs)
+                    self.assertEqual(
+                        [e.get("id") for e in pane.walk()
+                         if "data-refresh" in e.attrs], [])
+
+    def test_the_movements_block_of_a_single_vessel_is_gone(self) -> None:
+        root = self.listing(CHEMICALS, "?selected=benzaldehyde")
+        self.assertIsNone(root.find(id="category-detail-movements"))
+        self.assertEqual(root.find_all(cls="split-movements-head"), [])
+        self.assertEqual(root.find_all(cls="split-vessel-table"), [])
+        self.assertIsNone(root.find(id="category-detail-vessels"))
+
+    def test_the_old_pane_of_vessels_is_gone(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        for name in ("split-detail-head", "split-detail-actions",
+                     "item-detail--split", "split-vessel-actions",
+                     "split-vessel-note"):
+            self.assertEqual(root.find_all(cls=name), [], name)
+
+    def test_a_pane_without_vessels_has_no_second_split(self) -> None:
+        root = self.listing(INTERMEDIATES, "?selected=acetophenone&flask=1")
+        # No vessel of the substance is a flask: the list is empty.
+        self.assertEqual(pane_of(root).find_all("div", cls="split"), [])
+        details = self.client.get(
+            f"{INTERMEDIATES}acetophenone/?flask=1", **HTMX)
+        found = page(details)
+        self.assertIn("Keine Gefäße", found.text())
+        self.assertIsNone(found.find(id=LOT_TABLE))
+        self.assertIsNone(found.find(id="lot-detail"))
+
+    def test_the_lot_columns_in_german_and_english(self) -> None:
+        for base, key, german, english in (
+                (INTERMEDIATES, "acetophenone", DETAIL_COLS_INT_DE,
+                 DETAIL_COLS_INT_EN),
+                (CHEMICALS, "benzaldehyde", DETAIL_COLS_CHEM_DE,
+                 DETAIL_COLS_CHEM_EN)):
+            with self.subTest(base=base):
+                accept(language="de")
+                header, _ = detail_table(
+                    pane_of(self.listing(base, f"?selected={key}")))
+                self.assertEqual(header, german)
+                accept(language="en")
+                header, _ = detail_table(
+                    pane_of(self.listing(base, f"?selected={key}")))
+                self.assertEqual(header, english)
+
+
+class SelectingALotTests(LotCase):
+    """Scenario: Selecting a lot."""
+
+    def test_a_lot_names_the_marked_row_and_its_details(self) -> None:
+        second = self.lots[1]
+        root = self.listing(
+            query=f"?selected=acetophenone&lot={second.pk}")
+        self.assertEqual(lot_marked(root), [str(second.pk)])
+        self.assertEqual(lot_pane(root).get("data-item"), str(second.pk))
+
+    def test_a_lot_that_is_none_of_the_lots_is_the_first(self) -> None:
+        other = self.bottles[0]
+        for value in (str(other.pk), "", "abc", "-1", "99999999",
+                      str(self.lots[0].pk + 1000), "1.5"):
+            with self.subTest(lot=value):
+                root = self.listing(
+                    query=f"?selected=acetophenone&lot={value}")
+                self.assertEqual(lot_marked(root),
+                                 [str(self.lots[0].pk)])
+                self.assertEqual(lot_pane(root).get("data-item"),
+                                 str(self.lots[0].pk))
+
+    def test_a_lot_the_filters_hide_is_not_selected(self) -> None:
+        make_vessel(self.kl, substance=self.aceto, unit="g", amount="4",
+                    location="Regal 2")
+        hidden = self.lots[0]
+        root = self.listing(
+            query=f"?selected=acetophenone&location=Regal+2"
+                  f"&lot={hidden.pk}")
+        self.assertEqual(len(lot_ids(root)), 1)
+        self.assertNotIn(str(hidden.pk), lot_ids(root))
+        self.assertEqual(lot_marked(root), lot_ids(root))
+
+    def test_a_lot_is_read_where_the_substance_is_selected(self) -> None:
+        second = self.bottles[1]
+        root = self.listing(
+            CHEMICALS, f"?selected=benzaldehyde&lot={second.pk}")
+        self.assertEqual(lot_marked(root), [str(second.pk)])
+
+    def test_the_filter_bar_and_the_headers_name_the_lot(self) -> None:
+        second = self.lots[1]
+        root = self.listing(
+            query=f"?selected=acetophenone&lot={second.pk}")
+        fields = {c.get("name"): c.get("value") for c in
+                  root.find(id="filter-selected").find_all(
+                      "input", type="hidden")}
+        self.assertEqual(fields, {"selected": "acetophenone",
+                                  "lot": str(second.pk)})
+        links = root.find(id="item-head").find_all("a")
+        self.assertTrue(links)
+        for link in links:
+            found = query_of(link.get("href"))
+            self.assertEqual(found.get("selected"), ["acetophenone"])
+            self.assertEqual(found.get("lot"), [str(second.pk)])
+            self.assertEqual(query_of(link.get("hx-get")), found)
+
+    def test_the_resolved_first_lot_is_named_too(self) -> None:
+        root = self.listing(query="?selected=acetophenone")
+        fields = {c.get("name"): c.get("value") for c in
+                  root.find(id="filter-selected").find_all(
+                      "input", type="hidden")}
+        self.assertEqual(fields.get("lot"), str(self.lots[0].pk))
+        for link in root.find(id="item-head").find_all("a"):
+            self.assertEqual(query_of(link.get("href")).get("lot"),
+                             [str(self.lots[0].pk)])
+
+    def test_a_list_without_vessels_names_no_lot(self) -> None:
+        root = self.listing(query="?q=no-such-thing")
+        self.assertEqual(
+            root.find(id="filter-selected").find_all("input", name="lot"),
+            [])
+        for link in root.find(id="item-head").find_all("a"):
+            self.assertNotIn("lot", query_of(link.get("href")))
+
+    def test_the_lot_details_endpoint(self) -> None:
+        """The lot's details alone, its address, and the redirect."""
+        second = self.lots[1]
+        path = lot_url(INTERMEDIATES, "acetophenone", second)
+        response = self.client.get(path, **current(
+            f"{INTERMEDIATES}?location=Regal+1&selected=acetophenone"))
+        self.assertEqual(response.status_code, 200)
+        root = page(response)
+        for tag in ("html", "head", "body", "main", "nav", "script"):
+            self.assertEqual(root.find_all(tag), [], tag)
+        found = single(root)
+        self.assertEqual(found.get("id"), "lot-detail")
+        self.assertEqual(found.get("data-item"), str(second.pk))
+        self.assertEqual(root.find_all(id="item-detail"), [])
+        self.assertLessEqual({"hx-request", "hx-current-url"},
+                             vary_of(response))
+        self.assertEqual(
+            response["HX-Replace-Url"],
+            f"{INTERMEDIATES}?location=Regal+1&selected=acetophenone"
+            f"&lot={second.pk}")
+        plain = self.client.get(path)
+        self.assertIn(plain.status_code, (302, 303))
+        target = urlsplit(plain["Location"])
+        self.assertEqual(target.path, INTERMEDIATES)
+        self.assertEqual(
+            parse_qs(target.query),
+            {"selected": ["acetophenone"], "lot": [str(second.pk)]})
+        self.assertLessEqual({"hx-request", "hx-current-url"},
+                             vary_of(plain))
+
+    def test_the_lot_endpoint_ignores_a_foreign_current_url(self) -> None:
+        path = lot_url(INTERMEDIATES, "acetophenone", self.lots[2])
+        response = self.client.get(path, **current(
+            f"{INTERMEDIATES}?location=Nowhere&selected=x",
+            host="evil.example"))
+        self.assertEqual(
+            response["HX-Replace-Url"],
+            f"{INTERMEDIATES}?selected=acetophenone&lot={self.lots[2].pk}")
+
+    def test_the_lot_endpoint_of_the_commercial_chemicals(self) -> None:
+        path = lot_url(CHEMICALS, "benzaldehyde", self.bottles[1])
+        response = self.client.get(path, **HTMX)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(single(page(response)).get("data-item"),
+                         str(self.bottles[1].pk))
+        self.assertEqual(
+            response["HX-Replace-Url"],
+            f"{CHEMICALS}?selected=benzaldehyde&lot={self.bottles[1].pk}")
+
+    def test_the_rows_of_the_substance_list_name_no_lot(self) -> None:
+        root = self.listing(query=f"?lot={self.lots[1].pk}")
+        for row in root.find("tbody", id="item-rows").find_all("tr"):
+            self.assertNotIn("lot", query_of(row.get("hx-get")))
+
+
+class LotNotFoundTests(LotCase):
+    """Scenarios: A lot of another substance; A lot the filters hide."""
+
+    def test_a_lot_of_another_substance_or_category(self) -> None:
+        # The lot of its own substance and category is found.
+        self.assertEqual(self.client.get(
+            lot_url(INTERMEDIATES, "acetophenone", self.lots[0]),
+            **HTMX).status_code, 200)
+        self.assertEqual(self.client.get(
+            lot_url(CHEMICALS, "benzaldehyde", self.bottles[0]),
+            **HTMX).status_code, 200)
+        for path in (
+                lot_url(INTERMEDIATES, "acetophenone", self.bottles[0]),
+                lot_url(CHEMICALS, "acetophenone", self.lots[0]),
+                lot_url(INTERMEDIATES, "benzaldehyde", self.lots[0]),
+                lot_url(INTERMEDIATES, "benzaldehyde", self.bottles[0])):
+            for extra in (HTMX, {}):
+                with self.subTest(path=path, htmx=bool(extra)):
+                    self.assertEqual(
+                        self.client.get(path, **extra).status_code, 404)
+
+    def test_an_unknown_key_or_id_or_a_used_up_vessel(self) -> None:
+        used = make_vessel(self.kl, substance=self.aceto, unit="g",
+                           amount="0")
+        self.assertEqual(self.client.get(
+            lot_url(INTERMEDIATES, "acetophenone", self.lots[1]),
+            **HTMX).status_code, 200)
+        for path in (
+                lot_url(INTERMEDIATES, "no-such-substance", self.lots[0]),
+                f"{INTERMEDIATES}acetophenone/lots/{used.pk + 999}/",
+                lot_url(INTERMEDIATES, "acetophenone", used)):
+            for extra in (HTMX, {}):
+                with self.subTest(path=path, htmx=bool(extra)):
+                    self.assertEqual(
+                        self.client.get(path, **extra).status_code, 404)
+
+    def test_a_lot_the_filters_hide(self) -> None:
+        """Scenario: A lot the filters hide."""
+        opened = self.bottles[0]
+        Vessel.objects.filter(pk=opened.pk).update(
+            opened_on=date(2026, 3, 5))
+        path = lot_url(CHEMICALS, "benzaldehyde", opened)
+        self.assertEqual(self.client.get(path, **current(
+            f"{CHEMICALS}?sealed=1&selected=benzaldehyde")).status_code, 404)
+        self.assertEqual(self.client.get(path, **current(
+            f"{CHEMICALS}?selected=benzaldehyde")).status_code, 200)
+
+    def test_the_request_query_filters_without_a_current_url(self) -> None:
+        opened = self.bottles[0]
+        Vessel.objects.filter(pk=opened.pk).update(
+            opened_on=date(2026, 3, 5))
+        path = lot_url(CHEMICALS, "benzaldehyde", opened)
+        self.assertEqual(
+            self.client.get(path + "?sealed=1", **HTMX).status_code, 404)
+        self.assertEqual(self.client.get(path, **HTMX).status_code, 200)
+        foreign = self.client.get(path + "?sealed=1", **current(
+            f"{CHEMICALS}?selected=benzaldehyde", host="evil.example"))
+        self.assertEqual(foreign.status_code, 404)
+
+
+class NewSubstanceTests(LotCase):
+    """Scenario: A new substance brings its first lot."""
+
+    def test_the_substance_endpoint_names_its_first_lot(self) -> None:
+        other = make_substance("other-int", "Other")
+        earlier = make_vessel(self.kl, substance=other, unit="g",
+                              amount="5")
+        response = self.client.get(
+            f"{INTERMEDIATES}acetophenone/",
+            **current(f"{INTERMEDIATES}?selected=other-int"
+                      f"&lot={earlier.pk}"))
+        address = replaced(self, response)
+        self.assertEqual(urlsplit(address).path, INTERMEDIATES)
+        self.assertEqual(query_of(address), {
+            "selected": ["acetophenone"], "lot": [str(self.lots[0].pk)]})
+
+    def test_an_earlier_lot_is_ignored_even_when_it_is_the_same_substance(
+            self) -> None:
+        response = self.client.get(
+            f"{INTERMEDIATES}acetophenone/?lot={self.lots[2].pk}",
+            **current(f"{INTERMEDIATES}?selected=acetophenone"
+                      f"&lot={self.lots[2].pk}"))
+        self.assertEqual(
+            query_of(replaced(self, response)).get("lot"),
+            [str(self.lots[0].pk)])
+        found = single(page(response))
+        self.assertEqual(found.get("id"), "item-detail")
+        self.assertEqual(lot_pane(found).get("data-item"),
+                         str(self.lots[0].pk))
+        self.assertEqual(lot_marked(found), [str(self.lots[0].pk)])
+
+    def test_the_first_lot_is_the_oldest_batch(self) -> None:
+        old = make_vessel(
+            self.kl, substance=self.aceto, unit="g", amount="9",
+            date=date(2020, 1, 1))
+        make_vessel(self.kl, substance=self.aceto, unit="g", amount="9",
+                    date=date(2021, 1, 1))
+        response = self.client.get(f"{INTERMEDIATES}acetophenone/", **HTMX)
+        self.assertEqual(query_of(replaced(self, response)).get("lot"),
+                         [str(old.pk)])
+        root = self.listing(query="?selected=acetophenone")
+        self.assertEqual(lot_ids(root)[0], str(old.pk))
+        self.assertEqual(lot_ids(root)[-1], str(self.lots[-1].pk))
+
+    def test_no_lot_is_named_when_the_filters_admit_no_vessel(self) -> None:
+        response = self.client.get(
+            f"{INTERMEDIATES}acetophenone/?flask=1", **HTMX)
+        address = replaced(self, response)
+        self.assertEqual(query_of(address).get("selected"),
+                         ["acetophenone"])
+        self.assertNotIn("lot", query_of(address))
+
+    def test_the_lists_push_address_names_the_resolved_lot(self) -> None:
+        for query, wanted in (
+                ("", self.lots[0]),
+                (f"?lot={self.lots[1].pk}", self.lots[1]),
+                (f"?selected=acetophenone&lot={self.lots[2].pk}",
+                 self.lots[2]),
+                (f"?selected=acetophenone&lot={self.bottles[0].pk}",
+                 self.lots[0])):
+            with self.subTest(query=query):
+                response = self.client.get(INTERMEDIATES + query, **HTMX)
+                pushed = response["HX-Push-Url"]
+                self.assertEqual(query_of(pushed).get("lot"),
+                                 [str(wanted.pk)])
+                self.assertEqual(query_of(pushed).get("selected"),
+                                 ["acetophenone"])
+
+
+class LotDialogTests(FormCase):
+    """Scenario: The selected lot opened."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.sub = make_substance("benzaldehyde", "Benzaldehyde")
+        self.task = make_task(self.kl, self.sub, steps=1, started=past(1))
+        self.step = self.task.steps.get()
+        self.first, self.second = [
+            make_vessel(self.kl, substance=self.sub, source="bought",
+                        unit="g", amount="50", supplier="Sigma")
+            for _ in range(2)]
+
+    def test_the_selected_lot_opened(self) -> None:
+        self.client.cookies[CHEMICAL_COOKIE] = "details"
+        before = page(self.client.get(
+            f"{CHEMICALS}?sealed=1&selected=benzaldehyde"
+            f"&lot={self.second.pk}"))
+        self.assertEqual(lot_ids(before),
+                         [str(self.first.pk), str(self.second.pk)])
+        self.assertEqual(lot_marked(before), [str(self.second.pk)])
+
+        done = self.client.post(vessel_url(self.second, "withdraw"), {
+            "step": str(self.step.pk), "amount": "1",
+            "date": TODAY.isoformat()}, **HTMX)
+        self.assertEqual(done.status_code, 204)
+
+        # The page is fetched from the address that still names the
+        # second bottle, which no longer is a lot.
+        stale = f"{CHEMICALS}?sealed=1&selected=benzaldehyde" \
+                f"&lot={self.second.pk}"
+        after = page(self.client.get(stale))
+        self.assertEqual(outer_marked(after), ["benzaldehyde"])
+        self.assertEqual(lot_ids(after), [str(self.first.pk)])
+        self.assertEqual(lot_marked(after), [str(self.first.pk)])
+        self.assertEqual(lot_pane(after).get("data-item"),
+                         str(self.first.pk))
+        live = self.client.get(stale, **HTMX)
+        self.assertEqual(query_of(live["HX-Push-Url"]).get("lot"),
+                         [str(self.first.pk)])
+        fields = {c.get("name"): c.get("value") for c in
+                  after.find(id="filter-selected").find_all(
+                      "input", type="hidden")}
+        self.assertEqual(fields.get("lot"), str(self.first.pk))

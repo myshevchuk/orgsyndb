@@ -10,9 +10,11 @@ from . import (Element, make_batch, make_class, make_group, make_item,
                make_substance, make_task, make_vessel, page)
 from .demo_support import SeededCase
 from .inventory_support import InventoryCase, batch_url, item_url
-from .main_lists_support import (HTMX, body_of, cells, headers_of, heading_of,
-                                 link_in, must_pane, key_number, replaced,
-                                 texts_of_links, unsorted_reasons)
+from .main_lists_support import (body_of, cells, has_ancestor_class,
+                                 headers_of, heading_of, HTMX, key_number,
+                                 link_in, must_pane, pane_head, pane_widgets,
+                                 record_tables, replaced, texts_of_links,
+                                 unsorted_reasons)
 from .structure_support import ETHANOL
 from .test_inventory_dialogs import current
 
@@ -218,7 +220,7 @@ class TablesTests(SubstanceDetailsCase):
         """Scenario: Details of a bare substance."""
         make_substance("bare", "Bare")
         found = self.details("bare")
-        self.assertEqual(found.find_all("table"), [])
+        self.assertEqual(record_tables(found), [])
         self.assertGreaterEqual(found.text().count("Keine"), 3)
 
     def test_a_table_without_a_row_reads_none_alone(self) -> None:
@@ -238,8 +240,27 @@ class TablesTests(SubstanceDetailsCase):
                     unit="mg", amount="5")
         make_task(self.kl, "cinnamic-acid")
         found = self.details("cinnamic-acid")
-        self.assertEqual(len(found.find_all("table")), 3)
+        self.assertEqual(len(record_tables(found)), 3)
         self.assertEqual(unsorted_reasons(found), [])
+
+
+class HeadAndWidgetsTests(SubstanceDetailsCase):
+
+    def test_the_head_titles_the_substance_and_the_data_is_in_widgets(
+            self) -> None:
+        self.acid()
+        found = self.details("cinnamic-acid")
+        head = pane_head(found)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertEqual(title.find("a").get("href"),
+                         "/lab/registry/substances/cinnamic-acid/")
+        self.assertTrue(pane_widgets(found))
+        for each in pane_widgets(found):
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(found):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
 
 
 class EndpointTests(SubstanceDetailsCase):

@@ -17,6 +17,7 @@ from . import (Element, berlin, field_value, frozen, page)
 from .collection_support import accept
 from .inventory_support import (LIST, FormCase, cells, has_number,
                                 historical_line, item_url, num)
+from .main_lists_support import record_tables
 from .test_inventory_detail import detail_url, pane_of
 from .test_inventory_dialogs import HTMX, controls_of, errors_at
 from .widget_support import history_entries
@@ -450,7 +451,7 @@ class DetailsKeepTheirTableTests(WidgetCase):
             with self.subTest(source=source):
                 pane = pane_of(root)
                 self.assertEqual(pane.get("data-item"), str(item.pk))
-                tables = pane.find_all("table")
+                tables = record_tables(pane)
                 self.assertEqual(len(tables), 1)
                 grid = tables[0]
                 self.assertIn("aux-table", grid.classes)

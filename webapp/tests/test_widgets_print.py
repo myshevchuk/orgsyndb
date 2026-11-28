@@ -234,3 +234,73 @@ class TableStyleTests(SimpleTestCase):
         classes it once sat beside."""
         text = stripped(CSS)
         self.assertRegex(text, r"th\s*>\s*button\.sort-header")
+
+
+class SplitStyleTests(SimpleTestCase):
+    """The split element's rules: the golden ratio, the screen, the
+    paper, and the families of rules the split replaces (web-app: Main
+    lists; design: split layouts)."""
+
+    REMOVED = (".item-layout", ".split-detail-", ".split-vessel-",
+               ".split-movements-", ".detail-figures", ".detail-location",
+               ".detail-lots")
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.text = stripped(CSS)
+
+    def rule_bodies(self) -> list[tuple[str, str]]:
+        """Each style rule of the stylesheet, inside at-rules or not, as
+        its selector and its body."""
+        return [(" ".join(found.group(1).split()), found.group(2))
+                for found in re.finditer(r"([^{}]+)\{([^{}]*)\}", self.text)
+                if not found.group(1).strip().startswith("@")]
+
+    def tracks(self, major: str, axis: str) -> list[str]:
+        """The values of ``grid-template-<axis>`` in the rules for a split
+        whose larger side is MAJOR, with ``minmax(0, x)`` read as ``x``."""
+        found = []
+        for selector, body in self.rule_bodies():
+            if ".split" not in selector or not re.search(
+                    rf"\[data-major=[\"']?{major}[\"']?\]", selector):
+                continue
+            for value in re.findall(
+                    rf"grid-template-{axis}\s*:\s*([^;}}]+)", body):
+                value = re.sub(r"minmax\(\s*0(?:px)?\s*,\s*([^)]+)\)",
+                               r"\1", value)
+                found.append(" ".join(value.split()))
+        return found
+
+    def test_no_rule_names_the_removed_layouts(self) -> None:
+        for name in self.REMOVED:
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.text)
+
+    def test_the_larger_side_takes_the_golden_ratio(self) -> None:
+        for axis in ("rows", "columns"):
+            for major, wanted in (("first", "1.618fr 1fr"),
+                                  ("second", "1fr 1.618fr")):
+                with self.subTest(axis=axis, major=major):
+                    self.assertIn(wanted, self.tracks(major, axis))
+
+    def test_the_split_is_a_grid_on_the_screen_only(self) -> None:
+        for names, declarations in rules(self.text):
+            if any(name.startswith(".split") for name in names):
+                with self.subTest(selectors=names):
+                    self.assertNotEqual(declarations.get("display"), "grid")
+        shown = [declarations for block in screen_blocks(self.text)
+                 for names, declarations in rules(block)
+                 if any(name.startswith(".split") for name in names)]
+        self.assertTrue(any(d.get("display") == "grid" for d in shown),
+                        f"no @media screen rule makes a split a grid: "
+                        f"{shown}")
+
+    def test_the_panes_stay_off_paper(self) -> None:
+        """The details pane of a main list does not print: it is hidden
+        outside the screen rules that show it."""
+        hidden = [declarations for names, declarations
+                  in rules(self.text)
+                  if "#item-detail" in names
+                  and declarations.get("display") == "none"]
+        self.assertTrue(hidden, "no rule hides #item-detail on paper")

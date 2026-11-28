@@ -16,6 +16,7 @@ from inventory.models import Item
 from . import field_value, make_substance, page, table
 from .collection_support import accept
 from .inventory_support import LIST, InventoryCase, fresh
+from .main_lists_support import must_outer_split, outer_split
 from .test_inventory_colours import (CSS, MINIMUM, balanced, contrast,
                                      split_schemes)
 
@@ -863,7 +864,7 @@ class ViewTests(TableCase):
         self.assertEqual(self.label_of(root, table_radio), "Tabelle")
         self.assertEqual(self.label_of(root, details_radio), "Details")
         self.assertIsNotNone(fieldset.closest("main"))
-        self.assertIsNotNone(root.find("div", cls="item-layout"))
+        self.assertIsNotNone(outer_split(root))
 
     def test_the_switch_belongs_to_no_form(self) -> None:
         self.item("V-1")
@@ -886,8 +887,8 @@ class ViewTests(TableCase):
                 self.assertEqual(
                     [name for name, radio in radios.items()
                      if "checked" in radio.attrs], [f"view-{view}"])
-                self.assertEqual(root.find(cls="item-layout")
-                                 .get("data-view"), view)
+                self.assertEqual(
+                    must_outer_split(root).get("data-view"), view)
 
     def test_the_cookie_does_not_change_the_rows(self) -> None:
         self.item("V-1")
@@ -930,13 +931,13 @@ class ViewTests(TableCase):
             with self.subTest(query=query):
                 self.remember(None)
                 root = self.listing(query)
-                self.assertEqual(root.find(cls="item-layout")
-                                 .get("data-view"), "table")
+                self.assertEqual(
+                    must_outer_split(root).get("data-view"), "table")
                 self.assertNotIn("checked",
                                  self.radios(root)["view-details"].attrs)
                 root = self.listing(query, view="details")
-                self.assertEqual(root.find(cls="item-layout")
-                                 .get("data-view"), "details")
+                self.assertEqual(
+                    must_outer_split(root).get("data-view"), "details")
 
 
 class GeneratedRuleTests(TableCase):
@@ -1243,6 +1244,30 @@ class StylesheetTests(SimpleTestCase):
         for place, selector in capped:
             with self.subTest(selector=selector):
                 self.assertTrue(any(a <= place < b for a, b in spans))
+
+    def test_no_rule_names_the_old_pane_layout(self) -> None:
+        names = (".item-layout", ".split-detail-", ".split-vessel-",
+                 ".split-movements-", ".detail-figures",
+                 ".detail-location", ".detail-lots")
+        for _, selector, _ in located(self.text):
+            for name in names:
+                with self.subTest(selector=selector, name=name):
+                    self.assertNotIn(name, selector)
+
+    def test_the_view_rules_take_the_outer_split_alone(self) -> None:
+        """The two views zoom the list's own split, never one nested in
+        its pane."""
+        parts = [" ".join(part.split())
+                 for _, selector, _ in located(self.text)
+                 for part in selector.split(",")
+                 if "[data-view" in part or "#view-details:checked" in part]
+        self.assertTrue(parts)
+        named = [part for part in parts if re.search(r"\.split(?![\w])",
+                                                     part)]
+        self.assertTrue(named, "no view rule names the split")
+        for part in named:
+            with self.subTest(selector=part):
+                self.assertIn(".split--outer", part)
 
     def test_the_stylesheet_holds_no_rule_per_column(self) -> None:
         """The rules that hide a column of ``Spalten`` come with the

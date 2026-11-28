@@ -17,7 +17,9 @@ from .inventory_support import (BATCHES, COMPOUND_PAGE, DELIVERIES, LEVELS,
                                 has_number, historical_line, item_url,
                                 note_blocks, note_url, num, vessel_url)
 from .journal_support import entry_of, make_notebook
-from .main_lists_support import must_pane, projected_marks, strong_columns
+from .main_lists_support import (has_ancestor_class, must_pane, pane_head,
+                                 pane_widgets, projected_marks, record_tables,
+                                 strong_columns)
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
@@ -988,6 +990,28 @@ class DeliveryListTests(InventoryCase):
         self.assertTrue(has_amount(text, "2,5", "mg"), text)
         self.assertTrue(has_number(text, "2"), text)
         self.assertTrue(has_number(text, "7"), text)
+
+    def test_the_details_are_a_head_and_widgets(self) -> None:
+        """The note's details: its number titles a head that links to its
+        page, and its data and lines are in widgets."""
+        item = self.item("CH-0012", name="Zimtsäure", quantity=20)
+        note = book_note(self.kl, date=date(2026, 10, 15), number="LS-9",
+                         recipient="Produktion",
+                         lines=[delivery_line(item, 2, self.batch("CH-0012"))])
+        pane = must_pane(self.listing(f"?selected={note.pk}"))
+        head = pane_head(pane)
+        self.assertIsNotNone(head, "the pane has no head")
+        title = head.find("h2", id="item-detail-title")
+        self.assertIsNotNone(title, "the head has no title")
+        self.assertIn("LS-9", title.text())
+        self.assertEqual(title.find("a").get("href"),
+                         f"/lab/inventory/deliveries/{note.pk}/")
+        found = pane_widgets(pane)
+        self.assertTrue(found)
+        for each in found:
+            self.assertIsNotNone(each.find(cls="widget__head").find("h3"))
+        for grid in record_tables(pane):
+            self.assertIsNotNone(has_ancestor_class(grid, "widget"))
 
     def test_the_details_of_a_historical_note_show_its_lines(self) -> None:
         item = self.item("X-1", name="Anderes", quantity=50)

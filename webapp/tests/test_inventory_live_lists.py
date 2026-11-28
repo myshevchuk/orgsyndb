@@ -233,6 +233,7 @@ class LiveListAssertions:
 
     def assert_single_detail_fragment(
         self, response: Any, expected_item: str,
+        pane_id: str = "item-detail",
     ) -> Element:
         self.assertEqual(response.status_code, 200)
         root = page(response)
@@ -240,7 +241,7 @@ class LiveListAssertions:
             self.assertEqual(root.find_all(tag), [], tag)
         elements = [c for c in root.children if isinstance(c, Element)]
         self.assertEqual(len(elements), 1)
-        self.assertEqual(elements[0].get("id"), "item-detail")
+        self.assertEqual(elements[0].get("id"), pane_id)
         self.assertEqual(elements[0].get("data-item"), expected_item)
         return elements[0]
 
@@ -631,9 +632,10 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
     def test_live_filtering_on_category_lists(self) -> None:
         """Scenario: Live filtering on category lists."""
         sub_int = make_substance("acetophenone", "Acetophenone")
-        self.vessel(substance=sub_int, location="Regal 1")
+        v_int = self.vessel(substance=sub_int, location="Regal 1")
         sub_chem = make_substance("benzaldehyde", "Benzaldehyde")
-        self.vessel(substance=sub_chem, source="bought", supplier="Sigma")
+        v_chem = self.vessel(substance=sub_chem, source="bought",
+                             supplier="Sigma")
 
         res_int = self.client.get(
             f"{INTERMEDIATES}?location=Regal+1&sealed=1&selected=missing",
@@ -650,9 +652,11 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             res_int,
             INTERMEDIATES,
-            {"location": "Regal 1", "selected": "acetophenone"},
+            {"location": "Regal 1", "selected": "acetophenone",
+             "lot": str(v_int.pk)},
             exact_url=(
                 f"{INTERMEDIATES}?location=Regal+1&selected=acetophenone"
+                f"&lot={v_int.pk}"
             ),
         )
 
@@ -669,6 +673,11 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
                 "input", name="selected"),
             [],
         )
+        self.assertEqual(
+            page(res_empty).find(id="filter-selected").find_all(
+                "input", name="lot"),
+            [],
+        )
 
         res_chem = self.client.get(
             f"{CHEMICALS}?sealed=1&flask=1", **HTMX)
@@ -683,43 +692,89 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             res_chem,
             CHEMICALS,
-            {"sealed": "1", "selected": "benzaldehyde"},
-            exact_url=f"{CHEMICALS}?sealed=1&selected=benzaldehyde",
+            {"sealed": "1", "selected": "benzaldehyde",
+             "lot": str(v_chem.pk)},
+            exact_url=(f"{CHEMICALS}?sealed=1&selected=benzaldehyde"
+                       f"&lot={v_chem.pk}"),
         )
 
     def test_category_lists_push_an_order_that_is_not_the_default(
             self) -> None:
-        self.vessel(substance=make_substance("acetophenone", "Acetophenone"),
-                    location="Regal 1")
-        self.vessel(substance=make_substance("benzaldehyde", "Benzaldehyde"),
-                    source="bought", supplier="Sigma")
+        lot = self.vessel(
+            substance=make_substance("acetophenone", "Acetophenone"),
+            location="Regal 1").pk
+        chem = self.vessel(
+            substance=make_substance("benzaldehyde", "Benzaldehyde"),
+            source="bought", supplier="Sigma").pk
         key = "acetophenone"
         for query, pushed in (
-                ("?sort=substance", f"{INTERMEDIATES}?selected={key}"),
+                ("?sort=substance",
+                 f"{INTERMEDIATES}?selected={key}&lot={lot}"),
                 ("?sort=amount",
-                 f"{INTERMEDIATES}?sort=amount&selected={key}"),
+                 f"{INTERMEDIATES}?sort=amount&selected={key}&lot={lot}"),
                 ("?sort=amount&dir=desc",
-                 f"{INTERMEDIATES}?sort=amount&dir=desc&selected={key}"),
+                 f"{INTERMEDIATES}?sort=amount&dir=desc&selected={key}"
+                 f"&lot={lot}"),
                 ("?sort=substance&dir=desc",
                  f"{INTERMEDIATES}?sort=substance&dir=desc"
-                 f"&selected={key}")):
+                 f"&selected={key}&lot={lot}")):
             with self.subTest(query=query):
                 res = self.client.get(INTERMEDIATES + query, **HTMX)
                 self.assertEqual(res["HX-Push-Url"], pushed)
         res = self.client.get(f"{CHEMICALS}?sort=group&dir=desc", **HTMX)
         self.assertEqual(
             res["HX-Push-Url"],
-            f"{CHEMICALS}?sort=group&dir=desc&selected=benzaldehyde")
+            f"{CHEMICALS}?sort=group&dir=desc&selected=benzaldehyde"
+            f"&lot={chem}")
+
+    def test_a_lot_the_request_names_is_pushed_when_the_table_lists_it(
+            self) -> None:
+        """The address names the resolved ``lot``: the one the request
+        names among the vessels the table lists, else the first."""
+        sub = make_substance("acetophenone", "Acetophenone")
+        first = self.vessel(substance=sub, location="Regal 1")
+        second = self.vessel(substance=sub, location="Regal 1")
+        other = self.vessel(substance=sub, location="Regal 2")
+        for query, lot in (
+                (f"?selected=acetophenone&lot={second.pk}", second),
+                (f"?location=Regal+1&selected=acetophenone&lot={other.pk}",
+                 first),
+                (f"?location=Regal+2&selected=acetophenone&lot={other.pk}",
+                 other),
+                ("?selected=acetophenone&lot=nonsense", first),
+                ("?selected=acetophenone", first)):
+            with self.subTest(query=query):
+                res = self.client.get(INTERMEDIATES + query, **HTMX)
+                pairs = dict(parse_qsl(urlsplit(res["HX-Push-Url"]).query))
+                self.assertEqual(pairs["lot"], str(lot.pk))
+                self.assertEqual(pairs["selected"], "acetophenone")
+
+    def test_a_header_link_request_keeps_the_lot(self) -> None:
+        sub = make_substance("acetophenone", "Acetophenone")
+        self.vessel(substance=sub)
+        second = self.vessel(substance=sub)
+        res = self.client.get(
+            f"{INTERMEDIATES}?sort=amount&selected=acetophenone"
+            f"&lot={second.pk}", **HTMX)
+        self.assertEqual(
+            res["HX-Push-Url"],
+            f"{INTERMEDIATES}?sort=amount&selected=acetophenone"
+            f"&lot={second.pk}")
+        oob = page(res)
+        self.assertEqual(
+            oob.find(id="filter-selected").find("input", name="lot")
+            .get("value"), str(second.pk))
 
     def test_category_lists_canonical_push_url_rules(self) -> None:
         ketones = make_class("ketones", "Ketones")
         solvents = make_group("solvents", "Solvents")
         sub_int = make_substance("acetophenone", "Acetophenone",
                                  classes=[ketones])
-        self.vessel(substance=sub_int, flask=True, date=date(2020, 1, 1))
+        v_flask = self.vessel(substance=sub_int, flask=True,
+                              date=date(2020, 1, 1))
         sub_chem = make_substance("acetone", "Acetone", group=solvents)
-        self.vessel(substance=sub_chem, source="bought", supplier="Merck",
-                    location="Kühlraum")
+        v_acetone = self.vessel(substance=sub_chem, source="bought",
+                                supplier="Merck", location="Kühlraum")
 
         res_int = self.client.get(
             f"{INTERMEDIATES}?q=+acet+&class=ketones&flask=1&old=1"
@@ -735,6 +790,7 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
                 "flask": "1",
                 "old": "1",
                 "selected": "acetophenone",
+                "lot": str(v_flask.pk),
             },
         )
 
@@ -753,6 +809,7 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
                 "supplier": "Merck",
                 "sealed": "1",
                 "selected": "acetone",
+                "lot": str(v_acetone.pk),
             },
         )
 
@@ -931,7 +988,7 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
     def test_inventory_detail_endpoints_replace_the_list_url(self) -> None:
         """Scenario: Inventory detail endpoints replace the list URL."""
         item = self.item("CH-0012", category="Ester")
-        self.vessel("acetophenone", location="Regal 1")
+        lot = self.vessel("acetophenone", location="Regal 1")
 
         res_same = self.client.get(
             f"/lab/inventory/items/{item.pk}/detail/",
@@ -951,7 +1008,7 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
         self.assertEqual(
             res_keep["HX-Replace-Url"],
             f"{INTERMEDIATES}?"
-            f"location=Regal+1&selected=acetophenone",
+            f"location=Regal+1&selected=acetophenone&lot={lot.pk}",
         )
 
         batch = self.vessel("CH-0012", number="KL-9").batch
@@ -983,8 +1040,11 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
         item = self.item("CH-0012", category="Ester")
         bulk_v = self.vessel("CH-0012", flask=True)
         note = self.deliver(item, 1, number="LS-1")
-        self.vessel("acetophenone", location="Regal 1")
-        self.vessel("benzaldehyde", source="bought", supplier="Sigma")
+        lots = {
+            INTERMEDIATES: self.vessel("acetophenone", location="Regal 1"),
+            CHEMICALS: self.vessel("benzaldehyde", source="bought",
+                                   supplier="Sigma"),
+        }
         batch_v = self.vessel("CH-0012", number="KL-2")
 
         endpoints = [
@@ -1004,6 +1064,8 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
              "kind=end-product", str(batch_v.pk), False),
         ]
         for detail_url, base_url, flt, rec_id, keep_query in endpoints:
+            # The category lists name the first lot of the substance too.
+            lot = (f"&lot={lots[base_url].pk}" if base_url in lots else "")
             with self.subTest(detail_url=detail_url):
                 same = self.client.get(
                     detail_url,
@@ -1014,7 +1076,7 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
                     {"hx-request", "hx-current-url"}, vary_of(same))
                 self.assertEqual(
                     same["HX-Replace-Url"],
-                    f"{base_url}?{flt}&selected={rec_id}",
+                    f"{base_url}?{flt}&selected={rec_id}{lot}",
                 )
 
                 foreign = self.client.get(
@@ -1029,7 +1091,7 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
                     {"hx-request", "hx-current-url"}, vary_of(foreign))
                 self.assertEqual(
                     foreign["HX-Replace-Url"],
-                    f"{base_url}?selected={rec_id}",
+                    f"{base_url}?selected={rec_id}{lot}",
                 )
 
                 absent = self.client.get(detail_url, **HTMX)
@@ -1038,7 +1100,7 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
                     {"hx-request", "hx-current-url"}, vary_of(absent))
                 self.assertEqual(
                     absent["HX-Replace-Url"],
-                    f"{base_url}?selected={rec_id}",
+                    f"{base_url}?selected={rec_id}{lot}",
                 )
 
                 if keep_query:
@@ -1052,5 +1114,45 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
                     self.assert_single_detail_fragment(fallback, rec_id)
                     self.assertEqual(
                         fallback["HX-Replace-Url"],
-                        f"{base_url}?{flt}&selected={rec_id}",
+                        f"{base_url}?{flt}&selected={rec_id}{lot}",
                     )
+
+    def test_the_lot_endpoints_vary_and_replace_the_url(self) -> None:
+        """The lot endpoints answer with ``#lot-detail`` alone and name the
+        substance and the lot ("Lists by substance")."""
+        lots = {
+            INTERMEDIATES: ("acetophenone", "location=Regal+1",
+                            self.vessel("acetophenone",
+                                        location="Regal 1")),
+            CHEMICALS: ("benzaldehyde", "supplier=Sigma",
+                        self.vessel("benzaldehyde", source="bought",
+                                    supplier="Sigma")),
+        }
+        for base_url, (key, flt, vessel) in lots.items():
+            detail_url = f"{base_url}{key}/lots/{vessel.pk}/"
+            wanted = f"{base_url}?{flt}&selected={key}&lot={vessel.pk}"
+            with self.subTest(base_url=base_url):
+                same = self.client.get(
+                    detail_url,
+                    **current(f"{base_url}?{flt}&selected=stale&lot=0"))
+                self.assert_single_detail_fragment(
+                    same, str(vessel.pk), "lot-detail")
+                self.assertLessEqual(
+                    {"hx-request", "hx-current-url"}, vary_of(same))
+                self.assertEqual(same["HX-Replace-Url"], wanted)
+
+                foreign = self.client.get(
+                    detail_url,
+                    **current(f"{base_url}?{flt}&selected=stale",
+                              host="foreign.example"))
+                self.assert_single_detail_fragment(
+                    foreign, str(vessel.pk), "lot-detail")
+                self.assertEqual(
+                    foreign["HX-Replace-Url"],
+                    f"{base_url}?selected={key}&lot={vessel.pk}")
+
+                plain = self.client.get(detail_url)
+                self.assertIn(plain.status_code, (302, 303))
+                self.assertEqual(
+                    dict(parse_qsl(urlsplit(plain["Location"]).query)),
+                    {"selected": key, "lot": str(vessel.pk)})
