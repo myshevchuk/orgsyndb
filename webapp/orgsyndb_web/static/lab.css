@@ -1166,6 +1166,19 @@ details.widget[open] > summary.widget__head h3::before {
     min-height: 0;
     overflow: auto;
   }
+  /* One column: the widgets above the last keep their content's height,
+     the last takes the rest. */
+  .widget-grid--1 {
+    display: flex;
+    flex-direction: column;
+  }
+  .widget-grid--1 > .widget { flex: 0 1 auto; max-height: 50%; }
+  .widget-grid--1 > .widget:not(:last-child) > .widget__body { flex: 0 1 auto; }
+  .widget-grid--1 > .widget:last-child { flex: 1 1 0; max-height: none; }
+  .widget-grid .aux-table:not(.kv-table) th,
+  .widget-grid .aux-table:not(.kv-table) td { white-space: nowrap; }
+  /* Marks such as "nachgetragen" wrap below the delivery number. */
+  .note-table td:first-child { white-space: normal; }
 
   @media (width < 56.25rem) {
     .split.split--columns[data-major="first"],

@@ -28,15 +28,13 @@
 <c-widget :title="movements_title" heading="h3" flush>
 <table id="{% if lot_pane %}lot{% else %}vessel{% endif %}-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
-<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="number">{% translate "Amount" %}</th>{% if lot_pane %}<th scope="col" class="number">{% translate "Amount after" %}</th><th scope="col">{% translate "User" %}</th>{% endif %}<th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
 </thead>
 <tbody>
 {% for row in ledger %}<tr>
 <td data-sort="{{ row.movement.date|date:'Y-m-d' }}">{{ row.movement.date }}</td>
 <td>{{ row.movement.get_kind_display }}</td>
 <td class="number" data-sort="{{ row.movement.amount|base_sort }}">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
-{% if lot_pane %}<td class="number" data-sort="{{ row.movement.amount_after|base_sort }}">{{ row.movement.amount_after|in_vessel_unit:vessel }}</td>
-<td>{% person row.movement.user %}</td>{% endif %}
 <td>{{ row.movement.note }}</td>
 </tr>
 {% endfor %}</tbody>
