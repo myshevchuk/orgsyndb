@@ -701,48 +701,12 @@ details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
   background: none;
 }
 
-.kv-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.75rem;
-}
-.kv-table tr + tr {
-  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-}
-.kv-table th, .kv-table td {
-  border-bottom: 0;
-  padding: 0.27rem 0.6rem;
-  vertical-align: top;
-}
-.kv-table th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--muted);
-  width: 38%;
-  white-space: nowrap;
-}
-.kv-table td {
-  padding-left: 0.2rem;
-  color: var(--fg);
-  overflow-wrap: anywhere;
-}
-.kv-table td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.kv-table .muted { color: var(--muted); }
 .compound-key { font-family: var(--font-mono); font-size: 0.92em; }
 .smiles-row {
   display: flex;
   align-items: center;
   gap: 0.35rem;
   flex-wrap: wrap;
-}
-.kv-table .copy-button {
-  margin-left: 0;
-  font-size: 0.6875rem;
-  padding: 0.05rem 0.4rem;
 }
 .kv-sub {
   display: block;
@@ -751,44 +715,6 @@ details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
   font-weight: 400;
 }
 
-.widget-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.75rem;
-}
-.widget-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-align: left;
-  padding: 0.3rem 0.55rem;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.widget-table td, .widget-table tbody th {
-  padding: 0.27rem 0.55rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  text-align: left;
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-.widget-table tbody tr:last-child td,
-.widget-table tbody tr:last-child th { border-bottom: 0; }
-.widget-table tbody tr:hover td,
-.widget-table tbody tr:hover th {
-  background: color-mix(in srgb, var(--surface) 65%, transparent);
-}
-.widget-table .num, .widget-table .number {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.widget-table .nowrap { white-space: nowrap; }
-.widget-table .muted { color: var(--muted); }
 .rank-cell {
   display: inline-flex;
   align-items: center;
@@ -807,40 +733,6 @@ details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
   display: block;
   height: 100%;
   background: var(--link);
-}
-
-th > button.sort-header {
-  all: unset;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  cursor: pointer;
-  color: inherit;
-  font: inherit;
-}
-th > button.sort-header:hover { color: var(--fg); }
-th > button.sort-header:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  border-radius: 0.15rem;
-}
-th > button.sort-header::after {
-  content: " ⇅";
-  content: " ⇅" / "";
-  font-size: 0.625rem;
-  opacity: 0.45;
-}
-th[aria-sort="ascending"] > button.sort-header::after {
-  content: " ▲";
-  content: " ▲" / "";
-  opacity: 1;
-  color: var(--fg);
-}
-th[aria-sort="descending"] > button.sort-header::after {
-  content: " ▼";
-  content: " ▼" / "";
-  opacity: 1;
-  color: var(--fg);
 }
 
 .figures-strip {

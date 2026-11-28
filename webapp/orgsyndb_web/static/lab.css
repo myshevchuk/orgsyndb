@@ -99,15 +99,6 @@
 .lab-filters label { display: flex; flex-direction: column; gap: var(--space-1); }
 .lab-pick { margin: 0; font-family: var(--font-ui); }
 
-.task-table { width: 100%; }
-.task-table thead { background: var(--surface); }
-.task-table td:first-child { white-space: nowrap; }
-.task-table td:first-child a { text-decoration: none; }
-.task-table td:first-child a:hover { text-decoration: underline; }
-.task-table tr[data-state="cancelled"] td,
-.task-table tr[data-state="failed"] td { color: var(--muted); }
-.task-table progress { width: 4rem; vertical-align: middle; }
-
 /* A name the collection lacks. */
 .lab-mark { color: var(--muted); font-size: 0.875em; }
 
@@ -336,14 +327,165 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
   border-radius: 0.2rem;
 }
 
-.inventory-table { width: 100%; }
-.inventory-table thead { background: var(--surface); }
-.inventory-table td:first-child { white-space: nowrap; }
-.inventory-table .number { text-align: right; white-space: nowrap; }
-.inventory-table thead th a { color: inherit; text-decoration: none; }
-.inventory-table thead th a:hover { text-decoration: underline; }
-.inventory-table th[aria-sort="ascending"] a::after { content: " ▲"; content: " ▲" / ""; font-size: 0.75em; }
-.inventory-table th[aria-sort="descending"] a::after { content: " ▼"; content: " ▼" / ""; font-size: 0.75em; }
+/* Two table styles: .main-table for the ten main lists and .aux-table
+   for every other table (widgets, detail panes, record pages, forms,
+   and key-value tables via .kv-table). One sort-indicator style covers
+   both server header links and client button.sort-header. */
+.main-table {
+  width: auto;
+  font-size: 0.8125rem;
+}
+.main-table thead { background: var(--surface); }
+.main-table :is(th, td) {
+  height: 1.875rem;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.main-table :is(th, td):last-child { border-right: 0; }
+.main-table tbody td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.main-table tbody tr:last-child td { border-bottom: 0; }
+.main-table th { font-size: 0.75rem; font-weight: 600; vertical-align: bottom; }
+.main-table th small { display: block; color: var(--muted); font-size: 0.6875rem; font-weight: 400; }
+.main-table .num,
+.main-table .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.main-table .nowrap { white-space: nowrap; }
+.main-table .muted { color: var(--muted); }
+.main-table td a { text-decoration: none; }
+.main-table td a:hover { text-decoration: underline; }
+.main-table .col-fill,
+.main-table .col-note { width: 100%; }
+.main-table td.col-fill,
+.main-table td.col-note { white-space: normal; min-width: 12rem; }
+.main-table .badge {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  padding: 0 0.42rem;
+  white-space: nowrap;
+}
+.main-table tr.category-start > td { border-top: 1px solid var(--muted); }
+.main-table tr[data-state="cancelled"] td,
+.main-table tr[data-state="failed"] td { color: var(--muted); }
+.main-table progress { width: 4rem; vertical-align: middle; }
+.main-table tbody tr:hover > td:not(.stock, [class*="heat-"]) { background: var(--surface); }
+
+.aux-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.aux-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.3rem 0.55rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.aux-table td,
+.aux-table tbody th {
+  padding: 0.27rem 0.55rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.aux-table tbody tr:last-child td,
+.aux-table tbody tr:last-child th { border-bottom: 0; }
+.aux-table tbody tr:hover td,
+.aux-table tbody tr:hover th {
+  background: color-mix(in srgb, var(--surface) 65%, transparent);
+}
+.aux-table .num,
+.aux-table .number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.aux-table .nowrap { white-space: nowrap; }
+.aux-table .muted { color: var(--muted); }
+.aux-table td a { text-decoration: none; }
+.aux-table td a:hover { text-decoration: underline; }
+
+.kv-table tr + tr {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+.kv-table th,
+.kv-table td {
+  border-bottom: 0;
+  padding: 0.27rem 0.6rem;
+  vertical-align: top;
+}
+.kv-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  width: 38%;
+  white-space: nowrap;
+}
+.kv-table td {
+  padding-left: 0.2rem;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.kv-table tbody tr:hover th,
+.kv-table tbody tr:hover td { background: none; }
+.kv-table .copy-button {
+  margin-left: 0;
+  font-size: 0.6875rem;
+  padding: 0.05rem 0.4rem;
+}
+
+.main-table thead th > a,
+th > button.sort-header {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+.main-table thead th > a:hover,
+th > button.sort-header:hover { color: var(--fg); text-decoration: underline; }
+.main-table thead th > a:focus-visible,
+th > button.sort-header:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 0.15rem;
+}
+.main-table thead th > a::after,
+th > button.sort-header::after {
+  content: " ⇅";
+  content: " ⇅" / "";
+  font-size: 0.625rem;
+  opacity: 0.45;
+}
+th[aria-sort="ascending"] > :is(a, button.sort-header)::after {
+  content: " ▲";
+  content: " ▲" / "";
+  opacity: 1;
+  color: var(--fg);
+}
+th[aria-sort="descending"] > :is(a, button.sort-header)::after {
+  content: " ▼";
+  content: " ▼" / "";
+  opacity: 1;
+  color: var(--fg);
+}
 
 /* The inventory lists: compact heading, section tabs, single-line
    toolbar, view menu, compact item table and the note below it. The
@@ -678,32 +820,6 @@ details.lab-view-menu[open] > summary.lab-menu-button {
   color: var(--muted);
 }
 
-/* The table keeps the width its cells ask for, which the base columns
-   have in both views; the note, when shown, takes what is left. */
-.item-table { width: auto; font-size: 0.8125rem; }
-.item-table :is(th, td) {
-  height: 1.875rem;
-  padding: 0.2rem 0.6rem;
-  white-space: nowrap;
-  vertical-align: middle;
-  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-}
-.item-table :is(th, td):last-child { border-right: 0; }
-.item-table th { font-size: 0.75rem; font-weight: 600; vertical-align: bottom; }
-.item-table th small { display: block; color: var(--muted); font-size: 0.6875rem; font-weight: 400; }
-.item-table td a { text-decoration: none; }
-.item-table td a:hover { text-decoration: underline; }
-.item-table .col-note { width: 100%; }
-.item-table td.col-note { white-space: normal; min-width: 12rem; }
-.item-table .badge {
-  font-size: 0.6875rem;
-  line-height: 1.35;
-  padding: 0 0.42rem;
-  white-space: nowrap;
-}
-.bulk-table,
-.note-table,
-.category-table { width: 100%; }
 .bulk-table .article-number {
   font-family: var(--font-mono);
   font-size: 0.71875rem;
@@ -826,8 +942,6 @@ details.lab-view-menu[open] > summary.lab-menu-button {
   color: var(--muted);
 }
 .split-empty { margin: 0; padding: 0.75rem; }
-.item-table tr.category-start > td { border-top: 1px solid var(--muted); }
-.item-table tbody tr:hover > td:not(.stock, [class*="heat-"]) { background: var(--surface); }
 [popovertarget]:has(+ :popover-open) { outline: 2px solid var(--link); outline-offset: 2px; }
 .lab-table-note { margin: var(--space-2) 0 0; color: var(--muted); font-family: var(--font-ui); font-size: 0.8125rem; }
 .lab-table-note strong { color: var(--fg); font-weight: 600; }
@@ -837,9 +951,9 @@ details.lab-view-menu[open] > summary.lab-menu-button {
    `Spalten` hides its column through a rule the page itself brings,
    `Sehr kompakt` tightens the rows, and an unchecked `Verbrauch
    einfärben` drops the heat. lab.js only keeps their state. */
-main:has(#row-height option[value="tight"]:checked) .item-table { font-size: 0.75rem; }
-main:has(#row-height option[value="tight"]:checked) .item-table :is(th, td) { height: 1.75rem; padding: 0.1rem 0.45rem; }
-main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background: none; color: inherit; }
+main:has(#row-height option[value="tight"]:checked) .main-table { font-size: 0.75rem; }
+main:has(#row-height option[value="tight"]:checked) .main-table :is(th, td) { height: 1.75rem; padding: 0.1rem 0.45rem; }
+main:has(#heat-switch:not(:checked)) .main-table td[class*="heat-"] { background: none; color: inherit; }
 
 /* Menus that open as popups. Browsers with full CSS Anchor Positioning
    place each popup against its trigger button and flip or clamp to the
@@ -977,20 +1091,6 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
 .quarter-bar.current .bar { background: var(--link); }
 .quarter-bar .bar-value { flex-shrink: 0; text-align: center; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .quarter-bar .bar-label { position: absolute; top: 100%; left: 0; right: 0; padding-top: 0.3rem; color: var(--muted); font-size: 0.6875rem; text-align: center; white-space: nowrap; }
-.detail-table { width: 100%; margin: 0 0 var(--space-3); font-size: 0.75rem; }
-.detail-table :is(th, td) { padding: 0.22rem 0.32rem; vertical-align: top; }
-.detail-table :is(th, td):first-child { padding-left: 0; }
-.detail-table :is(th, td):last-child { padding-right: 0; }
-.detail-table th { font-size: 0.6875rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
-.detail-table .number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.detail-table--movements td:nth-child(1) { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
-.detail-table--movements td:nth-child(2),
-.detail-table--movements td:nth-child(3) { white-space: nowrap; }
-.detail-table--movements td:nth-child(4) { overflow-wrap: anywhere; }
-.detail-table--lines td:nth-child(1) { white-space: nowrap; font-family: var(--font-mono); font-size: 0.6875rem; color: var(--muted); }
-.detail-table--lines td:nth-child(2) { overflow-wrap: anywhere; }
-.detail-table--lines td:nth-child(3) { white-space: nowrap; }
-.detail-table--lines td:nth-child(4) { white-space: nowrap; font-family: var(--font-mono); font-size: 0.6875rem; }
 /* While a choice loads, the old item's details stay in view but take no
    click. */
 #item-detail.htmx-request { opacity: 0.5; pointer-events: none; }
@@ -1000,9 +1100,7 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
    print open, and sort header buttons print so column headers stay. */
 @media print {
   .lab-toolbar, .lab-view-controls, .lab-table-note, .lab-heading .actions,
-  .lab-pick, .item-table input[name="item"], [popover],
-  .planning-filters { display: none; }
-  .planning-grid .widget { margin-bottom: 0.75rem; }
+  .lab-pick, .main-table input[name="item"], [popover] { display: none; }
   details.widget::details-content { content-visibility: visible; }
   th > button.sort-header {
     display: inline;
@@ -1032,11 +1130,15 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
   .table-sticky tbody td:first-child { z-index: 1; background: var(--bg); }
   .table-sticky thead :is(th, td):first-child { z-index: 3; }
 
-  .item-table tbody tr { cursor: pointer; }
-  .item-table tbody tr[aria-current="true"] > td:not(.stock, [class*="heat-"]) {
+  .main-table tbody tr[data-item] { cursor: pointer; }
+  .main-table tbody tr[aria-current="true"] > td:not(.stock, [class*="heat-"]) {
     background: color-mix(in srgb, var(--link) 14%, var(--bg));
   }
-  .item-table tbody tr[aria-current="true"] > td:first-child { box-shadow: inset 3px 0 0 var(--link); }
+  .main-table tbody tr[aria-current="true"] > td:first-child { box-shadow: inset 3px 0 0 var(--link); }
+  .main-table tbody tr:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
 
   /* Without the script nothing disables `Spalten`, whose columns the
      details view does not show. */
@@ -1147,23 +1249,6 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
       border-bottom: 1px solid var(--border);
     }
     body.lab-frame .table-sticky thead :is(th, td):first-child { z-index: 3; }
-    body.lab-frame .inventory-table:not(.item-table) thead th {
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 0.4rem 0.55rem;
-      white-space: nowrap;
-    }
-    body.lab-frame .inventory-table:not(.item-table) tbody td {
-      font-size: 0.8125rem;
-      padding: 0.34rem 0.55rem;
-      border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-    }
-    body.lab-frame .inventory-table tbody tr:last-child td { border-bottom: 0; }
-    body.lab-frame .inventory-table:not(.item-table) tbody tr:hover td {
-      background: color-mix(in srgb, var(--surface) 70%, transparent);
-    }
-    body.lab-frame .inventory-table:not(.item-table) td a { text-decoration: none; }
-    body.lab-frame .inventory-table:not(.item-table) td a:hover { text-decoration: underline; }
     body.lab-frame .item-layout[data-scripted][data-view="details"],
     body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) {
       display: grid;
@@ -1239,12 +1324,12 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
      slides in from the right and out to it. */
   @media (prefers-reduced-motion: no-preference) {
     :root { --view-duration: 0.25s; }
-    .item-layout > .table-scroll.table-sticky { view-transition-name: item-table; }
+    .item-layout > .table-scroll.table-sticky { view-transition-name: main-table; }
     #item-detail { view-transition-name: item-pane; }
     #item-detail.item-detail--split { view-transition-name: split-pane; }
-    ::view-transition-group(item-table) { overflow: clip; animation-duration: var(--view-duration); }
-    ::view-transition-old(item-table),
-    ::view-transition-new(item-table) {
+    ::view-transition-group(main-table) { overflow: clip; animation-duration: var(--view-duration); }
+    ::view-transition-old(main-table),
+    ::view-transition-new(main-table) {
       width: 100%;
       height: 100%;
       object-fit: none;
@@ -1286,69 +1371,10 @@ table.note-lines { padding: 0; }
   white-space: nowrap;
 }
 
-/* The planning: the filter chips, multi-line cells for tasks and actions,
-   priority badges, inspector blocks and the mark of a late task. */
-.planning-filters {
-  margin-left: auto;
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-.planning-filter {
-  font: inherit;
-  font-size: 0.6875rem;
-  line-height: 1.4;
-  padding: 0.08rem 0.5rem;
-  border-radius: 99px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--muted);
-  cursor: pointer;
-}
-.planning-filter:hover { color: var(--fg); border-color: var(--muted); }
-.planning-filter[aria-pressed="true"] {
-  color: var(--fg);
-  background: var(--surface);
-  border-color: var(--fg);
-  font-weight: 600;
-}
+/* The planning: multi-line cells for tasks and actions, priority badges
+   and the mark of a late task. */
 .planning-lines { list-style: none; margin: 0; padding: 0; }
 .planning-lines > li + li { margin-top: 0.2rem; }
-.planning-select { font-weight: 600; text-decoration: none; }
-.planning-select:hover { text-decoration: underline; }
-/* On screen an article's name breaks between syllables, never inside
-   one, and its column keeps room for a long one; print keeps the
-   print stylesheet's wrapping, so a long name cannot widen the page. */
-@media screen {
-  .planning-table tbody td:first-child {
-    min-width: 8.5rem;
-    overflow-wrap: normal;
-    word-break: normal;
-    hyphens: auto;
-  }
-}
-.planning-table thead th,
-.planning-table tbody td { padding: 0.27rem 0.42rem; }
-.planning-table thead th { white-space: normal; }
-.planning-table th > button.sort-header { gap: 0.15rem; text-align: left; }
-.planning-table th.num > button.sort-header { text-align: right; }
-.planning-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  min-width: 0;
-}
-.planning-containers thead th,
-.planning-containers tbody td { padding: 0.26rem 0.45rem; }
-.planning-containers span.stock[class*="level-"] {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.25rem;
-  padding: 0 0.35rem;
-  font-size: 0.71875rem;
-  line-height: 1.4;
-  white-space: nowrap;
-}
 .priority--high { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }
 .priority--medium { background: var(--draft-bg); color: var(--draft-fg); }
 .priority--low { background: var(--surface); color: var(--muted); border-color: var(--border); }
@@ -1484,68 +1510,12 @@ body.lab-framed .figures-strip { margin-bottom: 0.6rem; }
     gap: 0.85rem;
     align-items: start;
   }
-  .planning-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 21.5rem;
-    grid-template-rows: auto 1fr;
-    gap: 0.85rem;
-    align-items: start;
-  }
-  .planning-list { grid-column: 1; grid-row: 1; }
-  .planning-parameters { grid-column: 1; grid-row: 2; }
-  .planning-inspector {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    position: sticky;
-    top: 0.85rem;
-    min-width: 0;
-  }
-  .planning-table tbody tr { cursor: pointer; }
-  .planning-table tbody tr[aria-current="true"] > td,
-  .planning-table tbody tr[aria-current="true"]:hover > td {
-    background: color-mix(in srgb, var(--link) 12%, var(--bg));
-  }
-  .planning-table tbody tr[aria-current="true"] > td:first-child {
-    box-shadow: inset 3px 0 0 var(--link);
-  }
-  .planning-table tbody tr:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: -2px;
-  }
-  @media (max-width: 70rem) {
-    .planning-grid {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto;
-    }
-    .planning-list, .planning-inspector, .planning-parameters {
-      grid-column: auto;
-      grid-row: auto;
-    }
-    .planning-inspector { position: static; }
-  }
   @media (max-width: 60rem) {
     .overview-grid, .item-grid, .substance-grid { grid-template-columns: minmax(0, 1fr); }
     .substance-aside { grid-column: auto; grid-row: auto; position: static; }
     .substance-main { grid-column: auto; grid-row: auto; }
   }
   .table-scroll--tall { max-height: 24rem; overflow: auto; }
-}
-#movements thead th {
-  white-space: normal;
-  padding: 0.25rem 0.25rem;
-}
-#movements td {
-  padding: 0.25rem 0.25rem;
-}
-#movements td:nth-child(3) {
-  overflow-wrap: normal;
-}
-#movements th > button.sort-header {
-  gap: 0.15rem;
-  text-align: left;
-}
-#movements th.num > button.sort-header {
-  text-align: right;
 }
 .figures-strip .stock {
   display: inline-flex;

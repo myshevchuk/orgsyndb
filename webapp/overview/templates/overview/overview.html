@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab planning %}
 {% block title %}{% translate "Lab at a glance" %}{% endblock %}
 {% block main %}
 <h1>{% translate "Lab at a glance" %}</h1>
@@ -10,7 +10,7 @@
 {% translate "Next syntheses" as next_title %}<c-widget :title="next_title" flush>
 <c-slot name="note_slot"><a href="/lab/planning/">{% translate "To planning" %}</a></c-slot>
 {% if next %}<div class="table-scroll">
-<table class="widget-table">
+<table id="overview-next" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Task" %}</th></tr>
 </thead>
@@ -18,8 +18,8 @@
 {% for entry in next %}<tr>
 <td class="nowrap"><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.forecast.article_number }}</a></td>
 <td>{% substance entry.forecast.substance %}</td>
-<td>{{ entry.forecast.priority_label }}</td>
-<td class="nowrap">{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
+<td data-sort="{{ entry.forecast.priority|priority_rank }}">{{ entry.forecast.priority_label }}</td>
+<td class="nowrap"{% if entry.forecast.latest_start %} data-sort="{{ entry.forecast.latest_start|date:'Y-m-d' }}"{% endif %}>{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
 <td class="nowrap">{% if entry.task %}<a href="/lab/tasks/{{ entry.task.task.number }}/">{{ entry.task.task.number }}</a> {{ entry.state }}{% if entry.task.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
@@ -50,7 +50,7 @@
 <div class="overview-col">
 {% blocktranslate with year=year|stringformat:"d" asvar requested_title %}Most requested in {{ year }}{% endblocktranslate %}<c-widget :title="requested_title" count="{% if requested %}{{ requested|length }}{% endif %}" flush>
 {% if requested %}{% with top=requested.0.count %}<div class="table-scroll">
-<table class="widget-table">
+<table id="overview-requested" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Substance" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
 </thead>
@@ -67,7 +67,7 @@
 {% endif %}</c-widget>
 {% blocktranslate with year=year|stringformat:"d" asvar recipients_title %}Recipients in {{ year }}{% endblocktranslate %}<c-widget :title="recipients_title" count="{% if recipients %}{{ recipients|length }}{% endif %}" flush>
 {% if recipients %}{% with top=recipients.0.1 %}<div class="table-scroll">
-<table class="widget-table">
+<table id="overview-recipients" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
 </thead>
@@ -84,14 +84,14 @@
 {% translate "Latest delivery notes" as latest_title %}<c-widget :title="latest_title" count="{% if latest %}{{ latest|length }}{% endif %}" flush>
 <c-slot name="note_slot"><a href="/lab/inventory/deliveries/">{% translate "All →" %}</a></c-slot>
 {% if latest %}<div class="table-scroll">
-<table class="widget-table">
+<table id="overview-latest" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Note" context "delivery note" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
 </thead>
 <tbody>
 {% for entry in latest %}<tr>
 <td class="nowrap"><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note }}</a></td>
-<td class="nowrap">{{ entry.note.date }}</td>
+<td class="nowrap" data-sort="{{ entry.note.date|date:'Y-m-d' }}">{{ entry.note.date }}</td>
 <td{% if not entry.note.recipient %} class="muted"{% endif %}>{{ entry.note.recipient|default:"–" }}</td>
 <td class="num">{{ entry.count }}</td>
 </tr>

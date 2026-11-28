@@ -1,10 +1,10 @@
 {% load i18n planning inventory %}{% translate "Forecast" as forecast_title %}<c-widget :title="forecast_title" flush>
-{% if entry.model %}{% with found=forecast settings=forecast.parameters model=entry.model %}<table class="kv-table"><tbody>
+{% if entry.model %}{% with found=forecast settings=forecast.parameters model=entry.model %}<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Demand model" %}</th> <td>{% if model.rough %}<strong>{% translate "Quarterly totals" %}</strong>{{ model.rough|rough }} <span class="kv-sub">{% blocktranslate with m=model.m|figure v=model.v|figure count=model.quarters %}m = {{ m }}, v = {{ v }} from {{ count }} quarters{% endblocktranslate %}</span>{% else %}<strong>{% blocktranslate with rate=model.rate|figure:4 %}λ = {{ rate }} per day{% endblocktranslate %}</strong> <span class="kv-sub">{% blocktranslate with count=model.sizes|length median=model.median|figure largest=model.largest %}{{ count }} orders · median {{ median }} · max. {{ largest }} containers{% endblocktranslate %}</span>{% endif %}</td></tr>
 <tr><th scope="row">{% translate "Runway on hand" %}</th> <td><strong>{{ entry.runway_on_hand|days }}</strong>{{ model.rough|rough }} <span class="kv-sub">{% blocktranslate with stock=entry.item.quantity certainty=settings.certainty|percent %}for {{ stock }} containers at a certainty of {{ certainty }}{% endblocktranslate %}</span></td></tr>
 </tbody></table>
 <h3>{% blocktranslate with article=found.article_number %}Article {{ article }}{% endblocktranslate %}</h3>
-<table class="kv-table"><tbody>
+<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Usable bulk" %}</th> <td><strong>{{ found.usable_bulk|amount }} {{ found.bulk_unit_label }}</strong> <span class="kv-sub">{% translate "each open vessel less the largest container size" %}</span></td></tr>
 <tr><th scope="row">{% translate "Runway" %}</th> <td><strong>{{ found.runway|days }}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with certainty=found.certainty|percent %}at a certainty of {{ certainty }} for each size{% endblocktranslate %}</span></td></tr>
 <tr><th scope="row">{% translate "Synthesis time" %}</th> <td><strong>{{ found.synthesis_days|days }}</strong> <span class="kv-sub">{% include "planning/basis.html" %}</span></td></tr>
@@ -14,7 +14,7 @@
 <tr><th scope="row">{% translate "New synthesis" %}</th> <td><strong>{% if found.yield_amount is not None %}{{ found.yield_amount|amount }} {{ found.bulk_unit_label }}{% if found.yield_mg is not None %} ({{ found.yield_mg }} mg){% endif %}{% endif %}{% for item, count in found.lacking_items %}{% if found.yield_amount is not None or not forloop.first %} · {% endif %}{{ count }} × {{ item.container }}{% endfor %}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with days=found.yield_days|days synthesis=found.synthesis_days|days buffer=settings.buffer_days|days target=settings.target_days|days certainty=found.certainty|percent %}to last {{ days }} (synthesis time {{ synthesis }}, buffer {{ buffer }}, target {{ target }}) at a certainty of {{ certainty }} for each size, beyond the containers and the usable bulk{% endblocktranslate %}</span></td></tr>
 </tbody></table>
 <h3>{% translate "Delivery rhythm" %}</h3>
-<table class="kv-table"><tbody>
+<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Last delivery" %}</th> <td>{{ entry.rhythm.last|default_if_none:"–" }}</td></tr>
 <tr><th scope="row">{% translate "Deliveries in the past 365 days" %}</th> <td>{{ entry.rhythm.past_year }}</td></tr>
 <tr><th scope="row">{% translate "Usual interval" %}</th> <td>{% if entry.rhythm.interval is not None %}<strong>{{ entry.rhythm.interval|days }}</strong> <span class="kv-sub">{% translate "median of the past 730 days" %}</span>{% else %}– <span class="kv-sub">{% translate "fewer than three deliveries in the past 730 days" %}</span>{% endif %}</td></tr>
