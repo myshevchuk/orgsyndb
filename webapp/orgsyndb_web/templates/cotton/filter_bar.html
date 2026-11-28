@@ -1,10 +1,10 @@
-{% load i18n %}<c-vars action="" id="" selected="" :toolbar="True" form_class="lab-filters" />{% if toolbar %}<div class="lab-toolbar">
+{% load i18n %}<c-vars action="" id="" selected="" sort="" dir="" :toolbar="True" form_class="lab-filters" />{% if toolbar %}<div class="lab-toolbar">
 {{ start }}<form{% if id %} id="{{ id }}"{% endif %} class="{{ form_class }}" method="get" action="{{ action }}"{% if attrs %} {{ attrs }}{% endif %}>
-{{ slot }}<span id="filter-selected">{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">{% endif %}</span><button type="submit">{% translate "Filter" %}</button>
+{{ slot }}<span id="filter-selected">{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">{% endif %}</span>{% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% if dir %}<input type="hidden" name="dir" value="{{ dir }}">{% endif %}{% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>
 {{ after }}{% if end %}<div class="lab-toolbar__end">
 {{ end }}
 </div>
 {% endif %}</div>{% else %}<form{% if id %} id="{{ id }}"{% endif %} class="{{ form_class }}" method="get" action="{{ action }}"{% if attrs %} {{ attrs }}{% endif %}>
-{{ slot }}<span id="filter-selected">{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">{% endif %}</span><button type="submit">{% translate "Filter" %}</button>
+{{ slot }}<span id="filter-selected">{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">{% endif %}</span>{% if sort %}<input type="hidden" name="sort" value="{{ sort }}">{% if dir %}<input type="hidden" name="dir" value="{{ dir }}">{% endif %}{% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>{% endif %}

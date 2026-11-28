@@ -1,6 +1,6 @@
 {% load i18n planning %}{% translate "Planning parameters" as params_title %}<c-widget id="planning-parameters" :title="params_title" extra_class="planning-parameters" collapsible flush>
 <c-slot name="note_slot">{% blocktranslate with certainty=parameters.certainty|percent buffer=parameters.buffer_days synthesis=parameters.default_synthesis_days history=parameters.history_quarters orders=parameters.min_orders high=parameters.high_days medium=parameters.medium_days target=parameters.target_days %}{{ certainty }} · buffer {{ buffer }} d · default {{ synthesis }} d · {{ history }} Q · from {{ orders }} orders · < {{ high }} / < {{ medium }} d · target {{ target }} d{% endblocktranslate %}</c-slot>
-<table class="kv-table"><tbody>
+<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Certainty" %}</th><td><strong>{{ parameters.certainty|percent }}</strong></td></tr>
 <tr><th scope="row">{% translate "Buffer" %}</th><td><strong>{{ parameters.buffer_days|days }}</strong></td></tr>
 <tr><th scope="row">{% translate "Default synthesis time" %}</th><td><strong>{{ parameters.default_synthesis_days|days }}</strong> <span class="kv-sub">{% translate "until three syntheses exist" %}</span></td></tr>

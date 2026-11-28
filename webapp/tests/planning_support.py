@@ -9,12 +9,14 @@ import re
 from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
+from urllib.parse import quote
 
 from . import Element, make_task, parse
 from .inventory_support import TODAY, InventoryCase, historical_line
-from .widget_support import (body_rows, cells_of, grid, kv, title_of, widget,
+from .widget_support import (body_rows, cells_of, grid, kv, title_of,
                              widgets)
 
+HTMX = {"HTTP_HX_REQUEST": "true"}
 PLAN = "/lab/planning/"
 VESSEL_LIST = "/lab/inventory/vessels/"
 NEW_TASK = "/lab/tasks/new/"
@@ -23,9 +25,10 @@ COLUMNS_DE = ["Artikel", "Reichweite", "Synthesedauer", "Spätester Start",
               "Priorität", "Aufgaben", "Maßnahmen"]
 COLUMNS_EN = ["Article", "Runway", "Synthesis time", "Latest start",
               "Priority", "Tasks", "Actions"]
-FILTERS_DE = ["Alle", "Priorität hoch", "Mit Maßnahme", "Verspätet"]
-FILTERS_EN = ["All", "High priority", "With action", "Late"]
-LIST_TITLES = ("Planungsliste", "Planning list")
+SHOW_DE = ["Alle", "Priorität hoch", "Mit Maßnahme", "Verspätet"]
+SHOW_EN = ["All", "High priority", "With action", "Late"]
+SHOW_VALUES = ["", "high", "action", "late"]
+PRIORITIES = {"hoch": "high", "mittel": "medium", "niedrig": "low"}
 CONTAINERS_TITLES = ("Gebinde & Bedarf", "Containers and demand")
 CONTAINER_COLUMNS_DE = ["Gebinde", "Bestand", "Reichweite", "Bedarf/Jahr"]
 CONTAINER_COLUMNS_EN = ["Container", "Stock", "Runway", "Demand per year"]
@@ -222,32 +225,25 @@ class Row(dict):
     element: Element
 
 
-def list_widget(root: Element) -> Element:
-    """The widget ``Planungsliste`` of the page."""
-    return widget(root, *LIST_TITLES)
-
-
-def list_table(root: Element) -> Element | None:
-    """The table of the widget ``Planungsliste``, None when the page has
-    no such widget or the widget no table."""
-    for found in widgets(root):
-        if title_of(found) in LIST_TITLES:
-            return found.find("table")
-    return None
+def list_table(root: Element) -> Element:
+    """The main table of the planning list; fail when the page has
+    none."""
+    found = root.find("table", cls="main-table")
+    assert found is not None, "the page has no main table"
+    return found
 
 
 def rows_by_article(root: Element) -> dict[str, Row]:
-    """The planning list's rows by their ``data-article``, in page
-    order, each as a ``Row``; empty when the page has no list table.
-    Fail when two rows name one article or a row names none."""
+    """The planning list's rows by their ``data-item``, in page order,
+    each as a ``Row``; empty when the list holds no article. Fail when
+    the page has no main table or two rows name one article."""
     found = list_table(root)
-    if found is None:
-        return {}
     header, _ = grid(found)
     rows: dict[str, Row] = {}
     for tr in body_rows(found):
-        article = tr.get("data-article")
-        assert article, f"a row of the list has no data-article: {tr.attrs}"
+        article = tr.get("data-item")
+        if article is None:
+            continue
         assert article not in rows, f"two rows name the article {article}"
         row = Row(zip(header, cells_of(tr)))
         row.element = tr
@@ -255,58 +251,69 @@ def rows_by_article(root: Element) -> dict[str, Row]:
     return rows
 
 
-def blocks(root: Element) -> dict[str, Element]:
-    """The blocks of the inspector by their ``data-article``: the
-    elements that carry the attribute and are no table rows. Fail when
-    two of them name one article."""
-    found: dict[str, Element] = {}
-    for node in root.find_all(attrs={"data-article": True}):
-        if node.tag == "tr":
-            continue
-        article = node.get("data-article")
-        assert article not in found, \
-            f"two blocks of the inspector name the article {article}"
-        found[article] = node
+def priority_of(row: Row) -> str:
+    """The priority of ROW as its ``Priorität`` cell shows it, as the
+    key of the model: ``high``, ``medium`` or ``low``."""
+    return PRIORITIES[row["Priorität"].text()]
+
+
+def pane_of(root: Element) -> Element:
+    """The details pane ``#item-detail`` of a page or of the answer to a
+    details request; fail when there is none."""
+    found = root.find(id="item-detail")
+    assert found is not None, "the page has no #item-detail"
     return found
 
 
-def block_of(root: Element, article: str) -> Element:
-    """The inspector's block of ``article``, hidden or not."""
-    found = blocks(root)
-    assert article in found, \
-        f"the inspector has no block of {article}; it has {list(found)}"
-    return found[article]
+def detail_url(article: str, query: str = "") -> str:
+    """The path of the details of ARTICLE, its number percent-encoded
+    as one path segment, with QUERY, which starts with ``?`` or is
+    empty."""
+    return f"{PLAN}{quote(article, safe='')}/detail/{query}"
 
 
-def shown_blocks(root: Element) -> list[str]:
-    """The articles of the inspector's blocks that carry no
-    ``hidden``."""
-    return [article for article, node in blocks(root).items()
-            if "hidden" not in node.attrs]
+def detail_pane(client: Any, article: str, query: str = "?all=1"
+                ) -> Element:
+    """The pane the details endpoint answers an htmx request for ARTICLE
+    with; fail when it does not answer 200."""
+    response = client.get(detail_url(article, query), **HTMX)
+    assert response.status_code == 200, \
+        f"{detail_url(article, query)} answers {response.status_code}"
+    return pane_of(parse(response.content.decode("utf-8")))
 
 
-def containers_of(block: Element) -> Element:
-    """The widget ``Gebinde & Bedarf`` of ``block``."""
-    return widget(block, *CONTAINERS_TITLES)
+def part(scope: Element, *titles: str) -> Element:
+    """The part of the pane SCOPE that ``titles`` names: a widget with
+    that title, or what follows a heading of that text; fail when it has
+    none."""
+    for found in widgets(scope):
+        if title_of(found) in titles:
+            return found
+    return section(scope, *titles)
 
 
-def container_rows(block: Element) -> list[dict[str, Element]]:
-    """The rows of the containers table of ``block``, each by header
-    text."""
-    inside = containers_of(block).find("table")
-    assert inside is not None, "the widget of the containers has no table"
+def containers_of(scope: Element) -> Element:
+    """The part ``Gebinde & Bedarf`` of the pane SCOPE."""
+    return part(scope, *CONTAINERS_TITLES)
+
+
+def container_rows(scope: Element) -> list[dict[str, Element]]:
+    """The rows of the containers table of the pane SCOPE, each by
+    header text."""
+    inside = containers_of(scope).find("table")
+    assert inside is not None, "the part of the containers has no table"
     return grid(inside)[1]
 
 
-def details_of(block: Element) -> Element:
-    """The widget ``Planungsdetails`` of ``block``."""
-    return widget(block, *DETAILS_TITLES)
+def details_of(scope: Element) -> Element:
+    """The part ``Planungsdetails`` of the pane SCOPE."""
+    return part(scope, *DETAILS_TITLES)
 
 
-def details(block: Element) -> dict[str, Element]:
-    """The value cells of the widget ``Planungsdetails`` of ``block``
-    by key."""
-    return kv(details_of(block))
+def details(scope: Element) -> dict[str, Element]:
+    """The value cells of the key-value table of the part
+    ``Planungsdetails`` of the pane SCOPE by key."""
+    return kv(details_of(scope))
 
 
 def task_texts(cell: Element) -> dict[str, str]:
@@ -387,3 +394,11 @@ class PlanningCase(InventoryCase):
         response = self.client.get(path)
         self.assertEqual(response.status_code, 200, path)
         return parse(response.content.decode("utf-8"))
+
+    def pane(self, article: str, query: str = "?all=1",
+             signed_in: bool = False) -> Element:
+        """The details of ARTICLE as the details endpoint answers an
+        htmx request for them."""
+        if signed_in:
+            self.client.force_login(self.kl)
+        return detail_pane(self.client, article, query)

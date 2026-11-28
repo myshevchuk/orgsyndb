@@ -22,7 +22,7 @@
 </c-widget>
 {% translate "Movements" as movements_title %}<c-widget :title="movements_title" count="{{ ledger|length }}" flush>
 <div class="table-scroll table-scroll--tall">
-<table id="movements" class="widget-table" data-sortable data-controller="sortable-table">
+<table id="movements" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Count" %}</th><th scope="col" class="num">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
 </thead>
@@ -46,7 +46,7 @@
 {% translate "Bulk" as bulk_title %}<c-widget :title="bulk_title" count="{% if vessels %}{{ vessels|length }}{% endif %}" flush>
 {% if vessels %}<c-slot name="note_slot">{% include "inventory/bulk.html" %}</c-slot>{% endif %}
 {% if vessels %}<div class="table-scroll">
-<table class="widget-table">
+<table id="item-bulk" class="aux-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
 </thead>
@@ -55,9 +55,9 @@
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
 <td><a href="/lab/inventory/batches/{{ vessel.batch.pk }}/">{{ vessel.batch }}</a></td>
 <td>{{ vessel.kind_label }}</td>
-<td class="num">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td class="num" data-sort="{{ vessel.amount|base_sort }}">{{ vessel.amount|in_vessel_unit:vessel }}</td>
 <td>{{ vessel.location }}</td>
-<td class="nowrap">{{ vessel.batch.date|default_if_none:"" }}</td>
+<td class="nowrap"{% if vessel.batch.date %} data-sort="{{ vessel.batch.date|date:'Y-m-d' }}"{% endif %}>{{ vessel.batch.date|default_if_none:"" }}</td>
 <td class="num">{% if containers is None %}<span class="lab-mark">{% translate "does not convert" %}</span>{% else %}{{ containers }}{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
@@ -69,7 +69,7 @@
 </div>
 <div class="item-col">
 {% translate "Item data" as item_data_title %}<c-widget :title="item_data_title" note="{{ item.article_number|default:'' }}" flush>
-<table class="kv-table"><tbody>
+<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Substance" %}</th><td>{% substance item.substance %}</td></tr>
 <tr><th scope="row">{% translate "Category" %}</th><td>{{ item.category|default:"–" }}</td></tr>
 <tr><th scope="row">{% translate "Container" %}</th><td>{{ item.container }}</td></tr>
@@ -81,7 +81,7 @@
 {% if item.note %}<div class="item-note">{{ item.note|linebreaks }}</div>
 {% endif %}</c-widget>
 {% translate "Containers by batch" as containers_title %}<c-widget :title="containers_title" flush>
-{% if stocks or unknown %}<table class="widget-table">
+{% if stocks or unknown %}<table id="item-containers" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Batch" %}</th> <th scope="col" class="num">{% translate "Containers" %}</th></tr></thead>
 <tbody>
 {% for stock in stocks %}<tr><td><a href="/lab/inventory/batches/{{ stock.batch.pk }}/">{{ stock.batch }}</a></td> <td class="num"><strong>{{ stock.quantity }}</strong></td></tr>

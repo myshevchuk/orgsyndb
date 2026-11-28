@@ -1,28 +1,28 @@
-"""Tests of the planning list's inspector and its selection
-(production-planning: Planning list)."""
+"""Tests of the details of an article in the planning list
+(production-planning: Planning list), which ``/lab/planning/<article
+number>/detail/`` answers with."""
 
 import math
 from datetime import date, timedelta
 from decimal import Decimal
-from urllib.parse import quote
+from urllib.parse import parse_qs, urlsplit
 
 from inventory.bookings import reverse
 
-from . import Element, make_task
+from . import Element, make_task, page
 from .collection_support import accept
 from .inventory_support import (LEVELS, TODAY, has_amount, has_number,
                                 item_url, newest_movement, num)
+from .main_lists_support import (heading_of, key_number, replaced,
+                                 texts_of_links, unsorted_reasons)
 from .planning_support import (CONTAINER_COLUMNS_DE, CONTAINER_COLUMNS_EN,
-                               DETAIL_KEYS_DE, DETAIL_KEYS_EN, PLAN, WINDOW,
-                               PlanningCase, block_of, blocks,
-                               container_rows, containers_of, details,
-                               details_of, has_date, has_word,
-                               quarters_back, rows_by_article, shown_blocks,
-                               task_texts)
-from .widget_support import count_of, kv_rows, title_of
-
-NEW_BLOCK = "XX-0000"
-
+                               DETAIL_KEYS_DE, DETAIL_KEYS_EN, HTMX, PLAN,
+                               WINDOW, PlanningCase, container_rows,
+                               containers_of, detail_url, details,
+                               details_of, has_date, has_word, pane_of,
+                               quarters_back, rows_by_article, task_texts)
+from .test_inventory_dialogs import current, vary_of
+from .widget_support import kv_rows
 
 class InspectorCase(PlanningCase):
 
@@ -35,130 +35,194 @@ class InspectorCase(PlanningCase):
 
     def block(self, article: str, query: str = "?all=1",
               signed_in: bool = False) -> Element:
-        return block_of(self.get(PLAN + query, signed_in), article)
+        """The pane of ARTICLE as the details endpoint answers."""
+        return self.pane(article, query, signed_in)
 
 
-class BlockTests(InspectorCase):
+class EndpointTests(InspectorCase):
+    """The endpoint ``/lab/planning/<article number>/detail/``."""
 
     def setUp(self) -> None:
         super().setUp()
         self.three()
 
-    def test_one_block_per_row(self) -> None:
-        for query in ("", "?all=1"):
+    def test_htmx_gets_the_pane_alone(self) -> None:
+        response = self.client.get(detail_url("NV-15", "?all=1"), **HTMX)
+        self.assertEqual(response.status_code, 200)
+        root = page(response)
+        for tag in ("html", "head", "body", "main", "nav", "script"):
+            self.assertEqual(root.find_all(tag), [], tag)
+        found = [c for c in root.children if isinstance(c, Element)]
+        self.assertEqual([(e.get("id"), e.get("data-item")) for e in found],
+                         [("item-detail", "NV-15")])
+
+    def test_the_page_is_public(self) -> None:
+        self.assertEqual(
+            self.client.get(detail_url("NV-15"), **HTMX).status_code, 200)
+
+    def test_an_article_the_list_lacks_has_details_too(self) -> None:
+        """``NV-25`` is listed only with ``all=1``."""
+        self.assertNotIn("NV-25", rows_by_article(self.get(PLAN)))
+        found = self.pane("NV-25", "")
+        self.assertEqual(found.get("data-item"), "NV-25")
+
+    def test_the_address_keeps_the_query_of_the_row(self) -> None:
+        for query, wanted in (
+                ("?all=1", f"{PLAN}?all=1&selected=NV-15"),
+                ("?all=1&show=late",
+                 f"{PLAN}?all=1&show=late&selected=NV-15"),
+                ("?show=high", f"{PLAN}?show=high&selected=NV-15"),
+                ("", f"{PLAN}?selected=NV-15")):
             with self.subTest(query=query):
-                root = self.get(PLAN + query)
-                self.assertEqual(sorted(blocks(root)),
-                                 sorted(rows_by_article(root)))
-        self.assertEqual(sorted(blocks(self.get(PLAN))),
-                         ["NV-10", "NV-15"])
+                response = self.client.get(detail_url("NV-15", query),
+                                           **HTMX)
+                self.assertEqual(replaced(self, response), wanted)
 
-    def test_every_block_holds_both_widgets_hidden_or_not(self) -> None:
-        root = self.get(PLAN + "?all=1")
-        self.assertEqual(len(blocks(root)), 3)
-        for article, found in blocks(root).items():
-            with self.subTest(article=article):
-                self.assertEqual(title_of(containers_of(found)),
-                                 "Gebinde & Bedarf")
-                self.assertEqual(title_of(details_of(found)),
-                                 "Planungsdetails")
-                self.assertEqual(containers_of(found).tag, "section")
-                self.assertEqual(details_of(found).tag, "section")
-
-    def test_the_widgets_in_english(self) -> None:
-        accept(language="en")
-        found = self.block("NV-10")
-        self.assertEqual(title_of(containers_of(found)),
-                         "Containers and demand")
-        self.assertEqual(title_of(details_of(found)), "Planning details")
-
-    def test_the_first_row_is_selected_without_a_selection(self) -> None:
-        root = self.get(PLAN + "?all=1")
-        self.assertEqual(shown_blocks(root), ["NV-10"])
-        self.assertEqual(self.marked(root), ["NV-10"])
-
-    def marked(self, root: Element) -> list[str]:
-        """The articles of the rows that carry ``aria-current="true"``."""
-        return [article for article, row in rows_by_article(root).items()
-                if row.element.get("aria-current") == "true"]
-
-    def test_the_inspector_follows_the_selection(self) -> None:
-        """Scenario: The inspector follows the selection."""
-        root = self.get(PLAN + "?all=1&selected=NV-15")
-        found = blocks(root)
-        self.assertEqual(shown_blocks(root), ["NV-15"])
-        for article in ("NV-10", "NV-25"):
-            with self.subTest(article=article):
-                self.assertIn("hidden", found[article].attrs)
-        self.assertNotIn("hidden", found["NV-15"].attrs)
-        self.assertEqual(self.marked(root), ["NV-15"])
-        again = self.get(PLAN + f"?all=1&selected={NEW_BLOCK}")
-        self.assertEqual(shown_blocks(again), ["NV-10"])
-        self.assertEqual(self.marked(again), ["NV-10"])
-
-    def test_the_selected_block_has_no_hidden_ancestor(self) -> None:
-        root = self.get(PLAN + "?all=1&selected=NV-25")
-        node = blocks(root)["NV-25"].parent
-        while node is not None:
-            self.assertNotIn("hidden", node.attrs, node.tag)
-            node = node.parent
-
-    def test_the_order_of_selected_and_all_is_free(self) -> None:
-        root = self.get(PLAN + "?selected=NV-15&all=1")
-        self.assertEqual(shown_blocks(root), ["NV-15"])
-
-    def test_a_selection_the_list_lacks_falls_back_to_the_first_row(
+    def test_the_address_keeps_the_filters_and_the_order_of_the_page(
             self) -> None:
-        """NV-25 has a forecast, but it is not listed without ``all``."""
-        root = self.get(PLAN + "?selected=NV-25")
-        self.assertEqual(shown_blocks(root), ["NV-10"])
-        self.assertEqual(self.marked(root), ["NV-10"])
-        self.assertNotIn("NV-25", blocks(root))
+        response = self.client.get(
+            detail_url("NV-15", "?all=1"),
+            **current(f"{PLAN}?all=1&show=high&sort=priority&dir=desc"
+                      "&selected=NV-10"))
+        self.assertEqual(
+            replaced(self, response),
+            f"{PLAN}?all=1&show=high&sort=priority&dir=desc"
+            "&selected=NV-15")
 
-    def test_an_empty_selection_falls_back_to_the_first_row(self) -> None:
-        root = self.get(PLAN + "?all=1&selected=")
-        self.assertEqual(shown_blocks(root), ["NV-10"])
+    def test_another_host_is_not_trusted(self) -> None:
+        response = self.client.get(
+            detail_url("NV-15", "?all=1"),
+            **current(f"{PLAN}?show=late&sort=priority", host="evil.example"))
+        self.assertEqual(replaced(self, response),
+                         f"{PLAN}?all=1&selected=NV-15")
 
-    def test_a_selection_must_be_the_article_number_itself(self) -> None:
-        for wrong in ("nv-15", "NV-1", "NV-150"):
-            with self.subTest(selected=wrong):
-                root = self.get(PLAN + "?all=1&selected=" + quote(wrong))
-                self.assertEqual(shown_blocks(root), ["NV-10"])
+    def test_without_htmx_the_list_is_the_answer(self) -> None:
+        for query, wanted in (("?all=1", {"all": ["1"]}),
+                              ("?all=1&show=late",
+                               {"all": ["1"], "show": ["late"]}),
+                              ("", {})):
+            with self.subTest(query=query):
+                response = self.client.get(detail_url("NV-15", query))
+                self.assertEqual(response.status_code, 302)
+                found = urlsplit(response["Location"])
+                self.assertEqual(found.path, PLAN)
+                self.assertEqual(parse_qs(found.query),
+                                 {**wanted, "selected": ["NV-15"]})
 
-    def test_only_the_selected_row_carries_aria_current(self) -> None:
-        root = self.get(PLAN + "?all=1&selected=NV-25")
-        marked = [e for e in root.walk()
-                  if e.get("aria-current") == "true"]
-        self.assertEqual(len(marked), 1)
-        self.assertIs(marked[0], rows_by_article(root)["NV-25"].element)
+    def test_an_article_without_a_forecast_is_not_found(self) -> None:
+        self.item("NV-0", size="1", unit="mg", quantity=10)
+        self.assertEqual(
+            self.client.get(detail_url("NV-15"), **HTMX).status_code, 200)
+        for number in ("NV-0", "XX-0000", "nv-15", "NV-1", "NV-150"):
+            for extra in ({}, HTMX):
+                with self.subTest(number=number, htmx=bool(extra)):
+                    self.assertEqual(
+                        self.client.get(detail_url(number, "?all=1"),
+                                        **extra).status_code, 404)
 
-    def test_the_link_loads_the_page_with_the_selection(self) -> None:
-        """Without the script, the ``Artikel`` link selects."""
-        for article in ("NV-10", "NV-15", "NV-25"):
-            with self.subTest(article=article):
-                link = rows_by_article(
-                    self.get(PLAN + "?all=1"))[article]["Artikel"].find("a")
-                root = self.get(link.get("href"))
-                self.assertEqual(shown_blocks(root), [article])
-                self.assertEqual(self.marked(root), [article])
-                self.assertEqual(len(rows_by_article(root)), 3)
+    def test_the_answer_varies_on_the_headers_it_reads(self) -> None:
+        response = self.client.get(detail_url("NV-15"), **HTMX)
+        self.assertLessEqual({"hx-request", "hx-current-url"},
+                             vary_of(response))
 
-    def test_a_selection_with_special_characters(self) -> None:
-        number = "XY 1&2+3#4"
+    def test_the_path_is_one_segment_whatever_the_number(self) -> None:
+        number = "XY 1&2+3#4/5"
         self.planned_item(number, quantity=12, name="Sonderfall")
-        rows = rows_by_article(self.get(PLAN + "?all=1"))
-        link = rows[number]["Artikel"].find("a")
-        root = self.get(link.get("href"))
-        self.assertEqual(shown_blocks(root), [number])
-        self.assertEqual(self.marked(root), [number])
-        for node in root.walk():
-            self.assertNotIn("XY", node.get("id", ""), node.tag)
+        found = self.pane(number)
+        self.assertEqual(found.get("data-item"), number)
+        self.assertIn("Sonderfall", found.text())
+        response = self.client.get(detail_url(number, "?all=1"), **HTMX)
+        found = urlsplit(replaced(self, response))
+        self.assertEqual(found.path, PLAN)
+        self.assertEqual(parse_qs(found.query),
+                         {"all": ["1"], "selected": [number]})
 
-    def test_a_selection_with_special_characters_by_hand(self) -> None:
-        number = "XY 1&2+3#4"
-        self.planned_item(number, quantity=12, name="Sonderfall")
-        root = self.get(PLAN + "?all=1&selected=" + quote(number, safe=""))
-        self.assertEqual(shown_blocks(root), [number])
+
+class PaneTests(InspectorCase):
+    """What the pane shows: the article as heading and two parts."""
+
+    def test_the_heading_names_the_article_and_its_number(self) -> None:
+        self.planned_item("NV-1", quantity=10, name="Probe Eins")
+        heading = heading_of(self.pane("NV-1"))
+        self.assertIn("Probe Eins", heading.text())
+        self.assertIn("NV-1", heading.text())
+
+    def test_the_heading_names_the_shown_name_of_the_substance(self) -> None:
+        self.demo_item()
+        self.assertIn("(E)-Zimtsäure",
+                      heading_of(self.pane("CH-0012")).text())
+        accept(language="en")
+        self.assertIn("(E)-Cinnamic acid",
+                      heading_of(self.pane("CH-0012")).text())
+
+    def test_both_parts_in_german_and_english(self) -> None:
+        self.planned_item("NV-1", quantity=10)
+        found = self.pane("NV-1")
+        self.assertTrue(containers_of(found).find("table"))
+        self.assertTrue(details_of(found).find("table"))
+        accept(language="en")
+        found = self.pane("NV-1")
+        self.assertTrue(containers_of(found).find("table"))
+        self.assertTrue(details_of(found).find("table"))
+
+    def test_the_list_page_holds_the_pane_of_its_selection(self) -> None:
+        self.three()
+        root = self.get(PLAN + "?all=1&selected=NV-15")
+        found = pane_of(root)
+        self.assertEqual(found.get("data-item"), "NV-15")
+        by_endpoint = self.pane("NV-15")
+        self.assertEqual(
+            [row["Bedarf/Jahr"].text()
+             for row in container_rows(found)],
+            [row["Bedarf/Jahr"].text()
+             for row in container_rows(by_endpoint)])
+        self.assertEqual(
+            {key: cell.text() for key, cell in details(found).items()},
+            {key: cell.text() for key, cell in details(by_endpoint).items()})
+
+    def test_only_the_selected_article_is_in_the_page(self) -> None:
+        self.three()
+        root = self.get(PLAN + "?all=1&selected=NV-15")
+        self.assertEqual(len(root.find_all(id="item-detail")), 1)
+        self.assertEqual(len(root.find_all("table", cls="kv-table")), 2)
+        for article in ("NV-10", "NV-25"):
+            self.assertNotIn(f"/lab/planning/{article}/",
+                             " ".join(a.get("href", "") for a in
+                                      pane_of(root).find_all("a")))
+
+    def test_the_container_table_sorts_in_the_browser(self) -> None:
+        self.three()
+        found = self.pane("NV-10")
+        self.assertEqual(unsorted_reasons(found), [])
+        grid = containers_of(found).find("table")
+        self.assertIn("data-sortable", grid.attrs)
+        self.assertIn("sortable-table", grid.get("data-controller").split())
+        self.assertTrue(grid.get("id"))
+        self.assertIsNone(details_of(found).find("table")
+                          .get("data-sortable"))
+
+    def test_the_stock_and_the_runway_carry_their_values_as_keys(
+            self) -> None:
+        """Compound cells key on their value (web-app: Widgets)."""
+        self.planned_item("NV-1", size="1", quantity=10)
+        (row,) = container_rows(self.pane("NV-1"))
+        self.assertEqual(row["Bestand"].get("data-sort"), "10")
+        self.assertEqual(num(row["Reichweite"]), 60)
+        self.assertEqual(math.floor(key_number(
+            row["Reichweite"].get("data-sort"))), 60)
+
+    def test_a_missing_runway_has_no_numeric_key(self) -> None:
+        self.planned_item("NV-1", size="1", quantity=10)
+        self.item("NV-1", "NV-1", "5", "mg", 3)
+        _, unused = container_rows(self.pane("NV-1"))
+        self.assertIn(unused["Reichweite"].get("data-sort"),
+                      (None, "", "–"))
+
+    def test_the_link_to_the_substance_page_is_in_the_pane(self) -> None:
+        self.demo_item()
+        links = texts_of_links(self.pane("CH-0012"))
+        self.assertEqual(links["(E)-Zimtsäure"],
+                         "/lab/registry/substances/cinnamic-acid/")
 
 
 class ContainersTests(InspectorCase):
@@ -224,12 +288,6 @@ class ContainersTests(InspectorCase):
                  for row in container_rows(self.block("NV-1"))]
         self.assertEqual(links, [item_url(self.small), item_url(self.large)])
 
-    def test_the_widget_names_the_article_and_has_no_count(self) -> None:
-        self.article()
-        found = containers_of(self.block("NV-1"))
-        self.assertEqual(found.find(cls="widget__note").text(), "NV-1")
-        self.assertIsNone(count_of(found))
-
     def test_the_runway_on_hand_of_each_size(self) -> None:
         self.planned_item("NV-1", size="1", quantity=10)
         self.planned_item("NV-1", size="5", quantity=20)
@@ -267,10 +325,9 @@ class ContainersTests(InspectorCase):
     def test_each_block_holds_the_items_of_its_own_article(self) -> None:
         first = self.planned_item("NV-1", size="1", quantity=10)
         second = self.planned_item("NV-2", size="5", quantity=11)
-        root = self.get(PLAN + "?all=1")
         for article, item in (("NV-1", first), ("NV-2", second)):
             with self.subTest(article=article):
-                rows = container_rows(block_of(root, article))
+                rows = container_rows(self.pane(article))
                 self.assertEqual(
                     [r["Gebinde"].find("a").get("href") for r in rows],
                     [item_url(item)])
@@ -291,21 +348,22 @@ class DetailsTests(InspectorCase):
             details_of(self.block("NV-1")))]
         self.assertEqual(keys, DETAIL_KEYS_EN)
 
-    def test_the_note_is_the_priority(self) -> None:
+    def test_the_part_names_the_priority(self) -> None:
         self.three()
-        root = self.get(PLAN + "?all=1")
         for article, label in (("NV-10", "hoch"), ("NV-15", "mittel"),
                                ("NV-25", "niedrig")):
             with self.subTest(article=article):
-                found = details_of(block_of(root, article))
-                self.assertEqual(found.find(cls="widget__note").text(),
-                                 label)
+                found = details_of(self.block(article))
+                self.assertTrue(has_word(found.text(), label), found.text())
+                for other in {"hoch", "mittel", "niedrig"} - {label}:
+                    self.assertFalse(has_word(found.text(), other),
+                                     found.text())
 
-    def test_the_note_in_english(self) -> None:
+    def test_the_priority_in_english(self) -> None:
         accept(language="en")
         self.three()
         found = details_of(self.block("NV-10"))
-        self.assertEqual(found.find(cls="widget__note").text(), "high")
+        self.assertTrue(has_word(found.text(), "high"), found.text())
 
     def test_the_substance_links_its_page_with_its_shown_name(self) -> None:
         self.demo_item()
@@ -387,8 +445,7 @@ class DetailsTests(InspectorCase):
         self.synthesis("NV-2", 25, TODAY - timedelta(days=60))
         for days in (30, 35, 40):
             self.synthesis("NV-3", days, TODAY - timedelta(days=days * 3))
-        root = self.get(PLAN + "?all=1")
-        cells = {a: details(block_of(root, a))["Synthesedauer"].text()
+        cells = {a: details(self.pane(a))["Synthesedauer"].text()
                  for a in ("NV-1", "NV-2", "NV-3")}
         self.assertEqual([num(cells[a]) for a in ("NV-1", "NV-2", "NV-3")],
                          [21, 25, 40])
@@ -402,11 +459,10 @@ class DetailsTests(InspectorCase):
         self.planned_item("NV-3", quantity=10)
         for days in (30, 35, 40):
             self.synthesis("NV-3", days, TODAY - timedelta(days=days * 3))
-        root = self.get(PLAN + "?all=1")
-        self.assertIn("default", details(block_of(root, "NV-1"))
+        self.assertIn("default", details(self.pane("NV-1"))
                       ["Synthesis time"].text())
         self.assertIn("longest of the last 3 syntheses",
-                      details(block_of(root, "NV-3"))
+                      details(self.pane("NV-3"))
                       ["Synthesis time"].text())
 
     def test_the_latest_start(self) -> None:
@@ -424,8 +480,7 @@ class DetailsTests(InspectorCase):
 
     def test_each_block_shows_the_figures_of_its_own_article(self) -> None:
         self.three()
-        root = self.get(PLAN + "?all=1")
-        shown = {a: num(details(block_of(root, a))["Reichweite"])
+        shown = {a: num(details(self.pane(a))["Reichweite"])
                  for a in ("NV-10", "NV-15", "NV-25")}
         self.assertEqual(shown, {
             a: math.floor(self.forecast(a).runway)
@@ -452,7 +507,7 @@ class InspectorTasksTests(InspectorCase):
         other = make_task(self.kl, substance="nv-1")
         make_task(self.kl, substance="NV-1", cancelled=True)
         root = self.get(PLAN + "?all=1")
-        cell = details(block_of(root, "NV-1"))["Aufgaben"]
+        cell = details(self.pane("NV-1"))["Aufgaben"]
         links = [a for a in cell.find_all("a")
                  if a.get("href", "").startswith("/lab/tasks/")]
         self.assertEqual([a.text() for a in links],
@@ -514,7 +569,6 @@ class InspectorTasksTests(InspectorCase):
     def test_the_tasks_of_other_articles_are_not_listed(self) -> None:
         self.planned_item("NV-2", quantity=10)
         task = make_task(self.kl, substance="NV-2")
-        root = self.get(PLAN + "?all=1")
-        self.assertIn(task.number, details(block_of(root, "NV-2"))
+        self.assertIn(task.number, details(self.pane("NV-2"))
                       ["Aufgaben"].text())
-        self.assertNotIn(task.number, block_of(root, "NV-1").text())
+        self.assertNotIn(task.number, self.pane("NV-1").text())

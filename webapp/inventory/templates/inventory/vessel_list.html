@@ -3,24 +3,25 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "Vessels" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span id="vessel-count" class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="vessel-count" class="lab-count" data-refresh>{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Kind" as kind_label %}{% translate "Used-up vessels too" as empty_label %}<c-filter-bar id="filters" action="/lab/inventory/vessels/" :toolbar="False" form_class="lab-filters lab-toolbar" hx-get="/lab/inventory/vessels/" hx-trigger="submit, change target:(select, input[type=checkbox])" hx-target="#vessel-rows" hx-select="#vessel-rows" hx-swap="morph:outerHTML" hx-select-oob="#vessel-count:morph" hx-push-url="true" hx-sync="#main:replace">
+{% translate "Kind" as kind_label %}{% translate "Used-up vessels too" as empty_label %}<c-filter-bar id="filters" action="/lab/inventory/vessels/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/inventory/vessels/" hx-trigger="submit, change target:(select, input[type=checkbox])" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#vessel-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-filter-select name="kind" :label="kind_label">
 <option value=""{% if not kind %} selected{% endif %}>{% translate "All kinds" %}</option>
 {% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
 <c-filter-check name="empty" :label="empty_label" :checked="empty" />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<div class="table-scroll">
-<table class="inventory-table">
-<thead>
-<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Opened" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<c-split-layout :view="view" cookie="vessel-list-view">
+<table class="main-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#vessel-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="vessel-rows">
-{% for vessel in vessels %}{% with batch=vessel.batch %}<tr>
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for vessel in vessels %}{% with batch=vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/vessels/{{ vessel.pk }}/detail/" hx-trigger="item-select"{% if vessel == detail_vessel %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
 <td>{% substance batch.substance %}</td>
 <td>{{ vessel.article_number|default_if_none:"" }}</td>
@@ -35,5 +36,42 @@
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
-</div>
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_vessel %}{% with vessel=detail_vessel batch=detail_vessel.batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
+<p>{% substance batch.substance %}{% if vessel.article_number %} · {{ vessel.article_number }}{% endif %}</p>
+</header>
+<dl class="detail-location">
+<dt>{% translate "Batch" %}</dt><dd><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></dd>
+<dt>{% translate "Kind" %}</dt><dd>{{ vessel.kind_label }}</dd>
+<dt>{% translate "Amount" %}</dt><dd>{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</dd>
+<dt>{% translate "Location" %}</dt><dd>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</dd>
+{% if batch.source == "bought" %}<dt>{% translate "Opened" %}</dt><dd>{% if vessel.opened_on %}{% blocktranslate with date=vessel.opened_on %}Opened on {{ date }}{% endblocktranslate %}{% else %}{% translate "sealed" %}{% endif %}</dd>
+{% endif %}<dt>{% translate "Note" context "inventory" %}</dt><dd>{{ vessel.note|default:"–" }}</dd>
+</dl>
+<p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
+{% if user.is_authenticated %}<p class="lab-actions">{% if vessel.amount %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/withdraw/" data-dialog>{% translate "Withdraw" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/transfer/" data-dialog>{% translate "Transfer" %}</a> · {% endif %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/correct/" data-dialog>{% translate "Correct" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/edit/" data-dialog>{% translate "Edit" %}</a></p>
+{% endif %}<h3>{% translate "Newest movements" %}</h3>
+<table id="vessel-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "Date" %}</th>
+<th scope="col">{% translate "Kind" %}</th>
+<th scope="col" class="number">{% translate "Amount" %}</th>
+<th scope="col">{% translate "Note" context "inventory" %}</th>
+</tr></thead>
+<tbody>
+{% for row in ledger %}<tr>
+<td data-sort="{{ row.movement.date|date:'Y-m-d' }}">{{ row.movement.date }}</td>
+<td>{{ row.movement.get_kind_display }}</td>
+<td class="number" data-sort="{{ row.movement.amount|base_sort }}">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
+<td>{{ row.movement.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+<p class="lab-empty">{% translate "No vessel is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}

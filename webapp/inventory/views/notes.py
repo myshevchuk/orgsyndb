@@ -8,6 +8,7 @@ from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from inventory import bookings
@@ -18,7 +19,21 @@ from inventory.views.common import (DELIVERIES, LIST, NOTE_COOKIE, form_page,
                                     htmx_detail_or_redirect, layers,
                                     list_view, note_url, pick_selected, saved,
                                     tabs)
-from orgsyndb_web.lists import htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, htmx_list_push_url,
+                                sort_value)
+
+NOTE_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("number", gettext_lazy("Number"),
+               lambda note: sort_value(str(note))),
+    SortColumn("date", gettext_lazy("Date"),
+               lambda note: sort_value(note.date)),
+    SortColumn("recipient", gettext_lazy("Recipient"),
+               lambda note: sort_value(note.recipient)),
+    SortColumn("lines", gettext_lazy("Lines"),
+               lambda note: sort_value(note.line_count)),
+    SortColumn("contents", gettext_lazy("Contents"), sortable=False),
+)
+NOTE_CLASSES = {"lines": "number table-only-summary"}
 
 
 def note_states(notes: list[DeliveryNote]) -> dict[int, str]:
@@ -67,14 +82,16 @@ def note_context(note: DeliveryNote, *, state: str | None = None,
 @vary_on_cookie
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def note_list(request: HttpRequest) -> HttpResponse:
-    """List the delivery notes, newest date first, then newest booking
-    first; ``q`` selects those whose number or recipient holds the text
-    regardless of case, and ``item`` those with a line of the item of
-    that ID. The note ``selected`` names among those listed, else the
-    first, is selected, in the view the cookie ``delivery-list-view``
+    """List the delivery notes, newest date first by default, then newest
+    booking first; ``q`` selects those whose number or recipient holds
+    the text regardless of case, and ``item`` those with a line of the
+    item of that ID. The note ``selected`` names among those listed, else
+    the first, is selected, in the view the cookie ``delivery-list-view``
     remembers."""
     q = request.GET.get("q", "").strip()
     chosen = request.GET.get("item", "").strip()
+    order = Order.from_query(request.GET, NOTE_COLUMNS, "date",
+                             default_descending=True)
     notes = DeliveryNote.objects.annotate(line_count=Count("lines")) \
         .prefetch_related("lines__item__article__substance",
                           "lines__batch").order_by(
@@ -88,13 +105,22 @@ def note_list(request: HttpRequest) -> HttpResponse:
     shown = [note for note in notes
              if not words or words in "\n".join(
                  [note.number or "", note.recipient]).casefold()]
+    shown = order.ordered(shown)
     states = note_states(shown)
     selected_note, selected = pick_selected(
         shown, request.GET.get("selected", ""), lambda note: note.pk)
+    filter_pairs: list[tuple[str, str]] = []
+    if q:
+        filter_pairs.append(("q", q))
+    if chosen:
+        filter_pairs.append(("item", chosen))
     response = render(request, "inventory/note_list.html", {
         "notes": [(note, states[note.pk]) for note in shown],
         "selected_note": selected_note,
         "selected": selected,
+        "order": order,
+        "headers": order.headers(DELIVERIES, filter_pairs, selected,
+                                 NOTE_CLASSES),
         **(note_context(selected_note, state=states[selected_note.pk],
                         lines=list(selected_note.lines.all()))
            if selected_note else {}),
@@ -106,11 +132,7 @@ def note_list(request: HttpRequest) -> HttpResponse:
                         key=Item.sort_key),
         "tabs": tabs(LIST),
     })
-    pairs: list[tuple[str, str]] = []
-    if q:
-        pairs.append(("q", q))
-    if chosen:
-        pairs.append(("item", chosen))
+    pairs = [*filter_pairs, *order.pairs()]
     if selected:
         pairs.append(("selected", selected))
     return htmx_list_push_url(

@@ -17,12 +17,14 @@ Open **Planning (Planung)** between **Inventory (Bestand)** and **Tasks
 (Aufgaben)** in the navigation. The list shows articles with high or
 medium priority and articles with an action due. It puts the smallest
 **Slack (Spielraum)** first: this is the time left before a new synthesis
-needs to start. Choose **All articles (Alle Artikel)** to see every
+needs to start. Tick **All articles (Alle Artikel)** to see every
 article with a forecast. Click an article's row, or move with the arrow
 keys, to see its **Containers and demand (Gebinde & Bedarf)** and
-**Planning details (Planungsdetails)** beside the list. The buttons **All
-(Alle)**, **High priority (Priorität hoch)**, **With action (Mit
-Maßnahme)** and **Late (Verspätet)** narrow the list.
+**Planning details (Planungsdetails)** beside the list. The choice
+**Show (Anzeigen)** narrows the list to **High priority (Priorität
+hoch)**, **With action (Mit Maßnahme)** or **Late (Verspätet)**; **All
+(Alle)** lists every row again. Click a column heading to sort by that
+column, and click it again to reverse the order.
 
 An *article* groups all container sizes with the same article number. Each
 size has its own stock and demand. Follow a container size to its inventory

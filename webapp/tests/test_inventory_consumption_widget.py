@@ -450,8 +450,11 @@ class DetailsKeepTheirTableTests(WidgetCase):
             with self.subTest(source=source):
                 pane = pane_of(root)
                 self.assertEqual(pane.get("data-item"), str(item.pk))
-                grid = pane.find("table", cls="detail-table")
-                self.assertIsNotNone(grid)
+                tables = pane.find_all("table")
+                self.assertEqual(len(tables), 1)
+                grid = tables[0]
+                self.assertIn("aux-table", grid.classes)
+                self.assertNotIn("data-sortable", grid.attrs)
                 self.assertEqual(grid.find_all("a"), [])
                 self.assertEqual(
                     [a.get("href") for a in pane.find_all("a")

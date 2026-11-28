@@ -45,6 +45,12 @@ class HistoryAssertions:
         self.assertEqual(title_of(found), TITLE)
         titled = [w for w in widgets(root) if title_of(w) == TITLE]
         self.assertEqual(len(titled), 1)
+        grid = found.find("table")
+        self.assertIsNotNone(grid)
+        self.assertIn("aux-table", grid.classes)
+        self.assertNotIn("main-table", grid.classes)
+        for name in ("data-sortable", "data-controller"):
+            self.assertNotIn(name, grid.attrs, "the history is not sortable")
         return found
 
     def assertCountIsEntries(self, root: Element) -> int:

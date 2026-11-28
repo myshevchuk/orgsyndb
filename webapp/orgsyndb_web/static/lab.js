@@ -1,19 +1,18 @@
 // The lab application's script, loaded with defer on every page of the
 // shell after htmx, idiomorph, and Stimulus.
 //
-// Exports six pure helpers on globalThis.OrgSynLab (place, paramSearch,
-// narrowBatches, sortOrder, planFilterShows, planStep) so tests can run
-// them without a DOM. In a browser document, installs the no-eval
-// htmx morph extension, print-time collapsible widget fallback, and
-// live-list document guards, then starts Stimulus with actionAttribute
-// "data-lab-action" and registers seven controllers:
+// Exports five pure helpers on globalThis.OrgSynLab (place, paramSearch,
+// narrowBatches, sortOrder, planStep) so tests can run them without a
+// DOM. In a browser document, installs the no-eval htmx morph extension,
+// print-time collapsible widget fallback, and live-list document guards,
+// then starts Stimulus with actionAttribute "data-lab-action" and
+// registers seven controllers:
 //   - popover-anchor: CSS Anchor Positioning with OrgSynLab.place fallback
 //   - view-menu: outside-click and Escape closing for details.lab-view-menu
 //   - remember: localStorage persistence for [data-remember] controls
 //   - batch-narrow: substance-scoped optgroup narrowing on [data-batch-for]
 //   - sortable-table: client-side sorting on table[data-sortable]
-//   - split-list: unified master-detail selection and stepping in htmx
-//     (.item-layout) and local (.planning-grid) modes
+//   - split-list: master-detail selection and stepping on .main-table
 //   - dialog: shell modal lifecycle and in-place [data-refresh] morphing
 (() => {
   "use strict";
@@ -146,15 +145,6 @@
     return items.map((item) => item.index);
   };
 
-  // Whether the planning list's FILTER ("all", "high", "action" or
-  // "late") shows ROW ({ priority, action, late }).
-  const planFilterShows = (row, filter) => {
-    if (filter === "high") return row.priority === "high";
-    if (filter === "action") return Boolean(row.action);
-    if (filter === "late") return Boolean(row.late);
-    return true;
-  };
-
   // The index of the nearest shown row before ("ArrowUp") or after
   // ("ArrowDown") CURRENT in SHOWN, a list of booleans in current row
   // order; returns CURRENT when none lies in that direction.
@@ -175,7 +165,7 @@
   };
 
   globalThis.OrgSynLab = {
-    place, paramSearch, narrowBatches, sortOrder, planFilterShows, planStep,
+    place, paramSearch, narrowBatches, sortOrder, planStep,
   };
   if (typeof document === "undefined") return;
 
@@ -366,8 +356,7 @@
     });
     document.addEventListener("htmx:afterSettle", (event) => {
       const target = event.detail && event.detail.target;
-      if (target && (target.id === "item-rows" || target.id === "batch-rows"
-                     || target.id === "vessel-rows")) {
+      if (target && target.id === "item-rows") {
         snapshotFilters();
       }
     });
@@ -465,8 +454,8 @@
   const stepIndex = (rows, shown, from, key) =>
     planStep(shown, rows.indexOf(from), key);
 
-  const HTMX_ROWS = ".item-table tbody tr[data-item]";
-  const OWN_LINKS = ".item-table thead a, #stock-entries a, #list-summary a";
+  const HTMX_ROWS = ".main-table tbody tr[data-item]";
+  const OWN_LINKS = ".main-table thead a, #stock-entries a, #list-summary a";
 
   const paneItem = () => {
     const pane = document.getElementById("item-detail");
@@ -743,165 +732,19 @@
         sortTable(this.element, colIndex, descending);
       };
       this.element.addEventListener("click", this._onClick);
+      // A morph keeps the table but drops its script-added buttons.
+      this._onSettle = () => enhanceSortable(this.element);
+      document.addEventListener("htmx:afterSettle", this._onSettle);
     }
 
     disconnect() {
       this.element.removeEventListener("click", this._onClick);
+      document.removeEventListener("htmx:afterSettle", this._onSettle);
     }
   }
 
-  // Master-detail split list in either "htmx" (.item-layout) or "local"
-  // (.planning-grid) mode.
+  // Master-detail split list on .item-layout with .main-table rows.
   class SplitListController extends Stimulus.Controller {
-    static values = { mode: String };
-
-    connect() {
-      if (this.modeValue === "local") {
-        this._connectLocal();
-      } else {
-        this._connectHtmx();
-      }
-    }
-
-    disconnect() {
-      if (this.modeValue === "local") {
-        this._disconnectLocal();
-      } else {
-        this._disconnectHtmx();
-      }
-    }
-
-    // --- Local mode (.planning-grid) ---
-
-    _planRows() {
-      return [...this._body.querySelectorAll("tr[data-article]")];
-    }
-
-    _planBlocks() {
-      return [...this.element.querySelectorAll("[data-article]")]
-        .filter((el) => el.tagName !== "TR");
-    }
-
-    _selectPlanRow(row, focusMode = null) {
-      const article = row.dataset.article;
-      markCurrent(this._planRows(), row);
-      for (const block of this._planBlocks()) {
-        block.hidden = block.dataset.article !== article;
-      }
-      replaceSelected(article);
-      if (focusMode === "click") {
-        row.focus({ preventScroll: true });
-      } else if (focusMode === "key") {
-        row.focus();
-      }
-    }
-
-    _connectLocal() {
-      this._table = this.element.querySelector("table[data-sortable]");
-      this._body = this._table && this._table.tBodies[0];
-      if (!this._table || !this._body) return;
-      this._count = this.element.querySelector("[data-planning-count]");
-      this._filterGroup = this.element.querySelector(".planning-filters");
-      this._noMatch = this.element.querySelector(".planning-no-match");
-      this._status = this.element.querySelector(".planning-status");
-
-      makeFocusable(this._planRows());
-      if (this._filterGroup) this._filterGroup.hidden = false;
-
-      this._onLocalClick = (event) => {
-        if (!plain(event) || !(event.target instanceof Element)) return;
-        const row = event.target.closest("tbody tr[data-article]");
-        if (!row || !this._body.contains(row)) return;
-        const selectLink = event.target.closest("a.planning-select");
-        if (selectLink && row.contains(selectLink)) {
-          event.preventDefault();
-        } else if (event.target.closest("a, button, input, select, textarea")) {
-          return;
-        }
-        this._selectPlanRow(row, "click");
-      };
-
-      this._onLocalKeydown = (event) => {
-        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        const rows = this._planRows();
-        const shown = rows.map((row) => !row.hidden);
-        const focused = event.target instanceof Element
-          ? event.target.closest("tbody tr[data-article]") : null;
-        const marked = rows.find(
-          (row) => row.getAttribute("aria-current") === "true") || null;
-        const from = focused && this._body.contains(focused)
-          ? focused : marked;
-        const current = rows.indexOf(from);
-        const next = stepIndex(rows, shown, from, event.key);
-        event.preventDefault();
-        if (next >= 0 && rows[next] && shown[next]
-            && (next !== current || rows[next] !== marked)) {
-          this._selectPlanRow(rows[next], "key");
-        }
-      };
-
-      this._onFilterClick = (event) => {
-        if (!plain(event) || !(event.target instanceof Element)) return;
-        const button = event.target.closest("button[data-plan-filter]");
-        if (!button || !this._filterGroup.contains(button)) return;
-        const filter = button.dataset.planFilter;
-        for (const each of this._filterGroup.querySelectorAll(
-          "button[data-plan-filter]")) {
-          each.setAttribute(
-            "aria-pressed",
-            each.dataset.planFilter === filter ? "true" : "false");
-        }
-        let shownCount = 0;
-        let firstShown = null;
-        let selectedHidden = false;
-        for (const row of this._planRows()) {
-          const visible = planFilterShows({
-            priority: row.dataset.priority || "",
-            action: row.dataset.action === "1",
-            late: row.dataset.late === "1",
-          }, filter);
-          row.hidden = !visible;
-          if (visible) {
-            shownCount += 1;
-            if (!firstShown) firstShown = row;
-          } else if (row.getAttribute("aria-current") === "true") {
-            selectedHidden = true;
-          }
-        }
-        if (this._count) this._count.textContent = String(shownCount);
-        if (this._noMatch) this._noMatch.hidden = shownCount > 0;
-        if (this._status) {
-          this._status.textContent = shownCount > 0
-            ? this._status.dataset.text.replace("{n}", String(shownCount))
-            : (this._noMatch ? this._noMatch.textContent : "");
-        }
-        if (selectedHidden && firstShown) {
-          this._selectPlanRow(firstShown);
-        }
-      };
-
-      this._table.addEventListener("click", this._onLocalClick);
-      this._table.addEventListener("keydown", this._onLocalKeydown);
-      if (this._filterGroup) {
-        this._filterGroup.addEventListener("click", this._onFilterClick);
-      }
-    }
-
-    _disconnectLocal() {
-      if (this._table) {
-        this._table.removeEventListener("click", this._onLocalClick);
-        this._table.removeEventListener("keydown", this._onLocalKeydown);
-      }
-      if (this._filterGroup) {
-        this._filterGroup.removeEventListener("click", this._onFilterClick);
-      }
-    }
-
-    // --- HTMX mode (.item-layout) ---
-
     _htmxRows() {
       return [...document.querySelectorAll(HTMX_ROWS)];
     }
@@ -941,7 +784,6 @@
     }
 
     restoreAfterRefresh(ticked) {
-      if (this.modeValue !== "htmx") return;
       for (const box of document.querySelectorAll("input[name=item]")) {
         box.checked = ticked.has(box.value);
       }
@@ -949,7 +791,7 @@
       this._follow(paneItem());
     }
 
-    _connectHtmx() {
+    connect() {
       this.element.dataset.scripted = "";
       this._radios = [...document.querySelectorAll("input[name=view]")];
       const checked = this._radios.find((radio) => radio.checked);
@@ -1015,7 +857,10 @@
         }
         if (typeof htmx === "undefined" || !plain(event)) return;
         const row = event.target.closest(HTMX_ROWS);
-        if (!row || event.target.closest("a, input")) return;
+        if (!row || event.target.closest(
+          "a, button, label, input, select, textarea")) {
+          return;
+        }
         htmx.trigger(row, "item-select");
       };
       this._onHtmxKeydown = (event) => {
@@ -1025,7 +870,7 @@
           return;
         }
         if (!(event.target instanceof Element)
-            || !event.target.closest(".item-table")) {
+            || !event.target.closest(".main-table")) {
           return;
         }
         const rows = this._htmxRows();
@@ -1083,7 +928,7 @@
       document.addEventListener("htmx:afterSwap", this._onAfterSwap);
     }
 
-    _disconnectHtmx() {
+    disconnect() {
       if (this._radios) {
         for (const radio of this._radios) {
           radio.removeEventListener("change", this._onRadioChange);

@@ -3,20 +3,21 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "Batches" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span id="batch-count" class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="batch-count" class="lab-count" data-refresh>{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Search" as search_label %}{% translate "Batch, substance or supplier" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/batches/" :toolbar="False" form_class="lab-filters lab-toolbar" hx-get="/lab/inventory/batches/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q" hx-target="#batch-rows" hx-select="#batch-rows" hx-swap="morph:outerHTML" hx-select-oob="#batch-count:morph" hx-push-url="true" hx-sync="#main:replace">
+{% translate "Search" as search_label %}{% translate "Batch, substance or supplier" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/batches/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/inventory/batches/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#batch-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" autocomplete="off" />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<div class="table-scroll">
-<table class="inventory-table">
-<thead>
-<tr><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Lab notebook" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Yield" %}</th><th scope="col">{% translate "Stock" %}</th></tr>
+<c-split-layout :view="view" cookie="batch-list-view">
+<table class="main-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#batch-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="batch-rows">
-{% for batch, stock in rows %}<tr>
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for batch, stock in rows %}<tr data-item="{{ batch.pk }}" hx-get="/lab/inventory/batches/{{ batch.pk }}/detail/" hx-trigger="item-select"{% if batch == detail_batch %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
 <td>{% substance batch.substance %}</td>
 <td>{{ batch.article_number|default_if_none:"" }}</td>
@@ -28,5 +29,41 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div>
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_batch %}{% with batch=detail_batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ batch.pk }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></h2>
+<p>{% substance batch.substance %}{% if batch.article_number %} · {{ batch.article_number }}{% endif %}</p>
+</header>
+<dl class="detail-location">
+<dt>{% translate "Source" %}</dt><dd>{% include "inventory/batch_source.html" %}</dd>
+{% if batch.source == "made" %}<dt>{% translate "Lab notebook" %}</dt><dd>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% else %}–{% endif %}</dd>
+<dt>{% translate "Yield" %}</dt><dd>{% if batch.yield_amount is not None %}{{ batch|in_yield_unit }}{% else %}–{% endif %}</dd>
+{% endif %}<dt>{% translate "Date" %}</dt><dd>{% if batch.date %}{{ batch.date }}{% else %}–{% endif %}</dd>
+</dl>
+<p class="detail-links"><a href="/lab/inventory/batches/{{ batch.pk }}/">{% translate "Open batch page" %}</a></p>
+{% if user.is_authenticated %}<p class="lab-actions"><a href="/lab/inventory/batches/{{ batch.pk }}/edit/">{% translate "Edit" %}</a> · <a href="/lab/inventory/batches/{{ batch.pk }}/vessels/new/">{% translate "New vessel" %}</a></p>
+{% endif %}<h3>{% translate "Open vessels" %}</h3>
+{% if detail_vessels %}<table id="batch-detail-vessels" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "Vessel" %}</th>
+<th scope="col">{% translate "Kind" %}</th>
+<th scope="col">{% translate "Location" %}</th>
+<th scope="col" class="number">{% translate "Amount" %}</th>
+</tr></thead>
+<tbody>
+{% for vessel in detail_vessels %}<tr>
+<td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
+<td>{{ vessel.kind_label }}</td>
+<td>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</td>
+<td class="number" data-sort="{{ vessel.amount|base_sort }}">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}<p class="lab-empty">{% translate "None" %}</p>
+{% endif %}</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+<p class="lab-empty">{% translate "No batch is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}

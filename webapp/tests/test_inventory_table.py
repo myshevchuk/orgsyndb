@@ -595,12 +595,31 @@ class FilterTests(TableCase):
                                   "stock": "ok"})
         self.assertEqual(field_value(root, "q"), "o")
 
-    def test_without_a_reversed_order_no_dir_is_kept(self) -> None:
+    def test_the_default_order_is_not_kept(self) -> None:
+        """Main lists: the filter form keeps the order only while it is
+        not the default; the item list's default is the category."""
         item = self.item("O-1")
-        form = self.listing().find("form", id="filters")
-        self.assertEqual({i.get("name"): i.get("value") for i in
-                          form.find_all("input", type="hidden")},
-                         {"sort": "category", "selected": str(item.pk)})
+        for query in ("", "?sort=category", "?sort=nothing"):
+            with self.subTest(query=query):
+                form = self.listing(query).find("form", id="filters")
+                self.assertEqual(
+                    {i.get("name"): i.get("value") for i in
+                     form.find_all("input", type="hidden")},
+                    {"selected": str(item.pk)})
+
+    def test_an_order_that_is_not_the_default_is_kept(self) -> None:
+        item = self.item("O-1")
+        for query, kept in (
+                ("?sort=name", {"sort": "name"}),
+                ("?sort=category&dir=desc",
+                 {"sort": "category", "dir": "desc"}),
+                ("?sort=name&dir=desc", {"sort": "name", "dir": "desc"})):
+            with self.subTest(query=query):
+                form = self.listing(query).find("form", id="filters")
+                self.assertEqual(
+                    {i.get("name"): i.get("value") for i in
+                     form.find_all("input", type="hidden")},
+                    {**kept, "selected": str(item.pk)})
 
     def test_the_column_filters_are_gone(self) -> None:
         self.item("CH-0012", "(E)-Zimtsäure", note="Kühlschrank")
@@ -960,7 +979,7 @@ class GeneratedRuleTests(TableCase):
         self.assertEqual(
             sorted(part for part, _ in found),
             sorted(f"main:has(#column-{key}:not(:checked)) "
-                   f".item-table .col-{key}" for key in TABLE_VIEW))
+                   f".main-table .col-{key}" for key in TABLE_VIEW))
         for part, body in found:
             with self.subTest(rule=part):
                 self.assertRegex(body, r"display:\s*none")
@@ -1348,23 +1367,16 @@ class StylesheetTests(SimpleTestCase):
     def test_the_table_takes_its_natural_width(self) -> None:
         """Item list: a base column is as wide in one view as in the
         other, so the table does not stretch to its box."""
-        ours = (".item-table", "table.item-table",
-                ".inventory-table.item-table")
+        ours = (".main-table", "table.main-table")
         widths = [(start, part.strip(), width.strip())
                   for start, selector, body in located(self.text)
                   for part in selector.split(",")
                   for width in re.findall(r"(?<![-\w])width:\s*([^;}]+)",
                                           body)
                   if part.strip() in ours]
-        self.assertTrue(widths, "no rule sets the width of .item-table")
+        self.assertTrue(widths, "no rule sets the width of .main-table")
         start, part, width = widths[-1]
-        self.assertNotEqual(width, "100%")
-        if part == ".item-table":
-            every = [at for at, selector, body in located(self.text)
-                     if selector.strip() == ".inventory-table"
-                     and re.search(r"(?<![-\w])width:\s*100%", body)]
-            self.assertTrue(every and all(at < start for at in every),
-                            "the rule does not follow .inventory-table")
+        self.assertEqual(width, "auto")
 
     def test_the_marked_row_is_marked_in_both_views(self) -> None:
         marks = [(part.strip(), body)

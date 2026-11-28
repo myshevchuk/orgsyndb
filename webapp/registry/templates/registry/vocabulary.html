@@ -6,7 +6,7 @@
 {% if user.is_authenticated %}<p class="actions"><a href="/lab/registry/{{ name }}/new/">{% translate "New term" %}</a></p>
 {% endif %}</div>
 <div class="table-scroll">
-<table class="inventory-table vocabulary-table">
+<table class="aux-table vocabulary-table">
 <thead>
 <tr><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Label" %}</th><th scope="col">{% translate "German label" %}</th>{% if tree %}<th scope="col">{% translate "Parent" %}</th>{% endif %}<th scope="col" class="number">{% translate "In use" %}</th></tr>
 </thead>

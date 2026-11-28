@@ -12,6 +12,7 @@ from . import Element, page
 from .collection_support import accept
 from .inventory_support import (LEVELS, TODAY, has_amount, has_number,
                                 item_url, set_shares, vessel_url)
+from .main_lists_support import (lists_records, key_number, unsorted_reasons)
 from .planning_support import PlanningCase, has_date, has_days
 from .widget_support import (ISO_DATE, ISO_MOMENT, carries, grid, item_widget,
                              kv, kv_rows, tile, tile_value, tiles,
@@ -310,6 +311,8 @@ class MovementsTableTests(ItemPageCase):
         root = self.show(self.scenario_item())
         found = self.table(root)
         self.assertIn("data-sortable", found.attrs)
+        self.assertIn("sortable-table", found.get("data-controller").split())
+        self.assertIn("aux-table", found.classes)
         self.assertTrue(found.get("id"))
         self.assertEqual([e for e in [found, *found.walk()]
                           if "aria-sort" in e.attrs], [])
@@ -439,6 +442,70 @@ class MovementsTableTests(ItemPageCase):
         for row in rows:
             self.assertRegex(row["Datum"].get("data-sort"),
                              ISO_DATE.pattern + r"\Z")
+
+
+class SortableTablesTests(ItemPageCase):
+    """Every table of the page that lists records one per row is
+    client-sortable and an auxiliary table (web-app: Widgets, "Widget and
+    pane tables sort in the browser")."""
+
+    def full_item(self) -> Any:
+        """An item with a movement, a share of a batch and two open
+        vessels, one of a dated batch."""
+        item = self.item("CH-0012", quantity=0)
+        batch = self.batch("CH-0012", number="KL0412",
+                           date=date(2026, 5, 1))
+        set_shares(item, (batch, 3), (None, 2))
+        self.vessel("CH-0012", "mg", "50", date=date(2026, 5, 1))
+        self.vessel("CH-0012", "g", "1")
+        return item
+
+    def test_every_record_table_is_sortable_and_auxiliary(self) -> None:
+        root = self.show(self.full_item())
+        self.assertEqual(unsorted_reasons(root), [])
+        sortable = [t for t in root.find_all("table") if lists_records(t)]
+        self.assertEqual(len(sortable), 3)
+
+    def test_no_other_table_is_sortable(self) -> None:
+        root = self.show(self.full_item())
+        others = [t for t in root.find_all("table") if not lists_records(t)]
+        self.assertTrue(others)
+        for found in others:
+            with self.subTest(table=found.get("class")):
+                self.assertNotIn("data-sortable", found.attrs)
+                self.assertNotIn("data-controller", found.attrs)
+                self.assertIn("aux-table", found.classes)
+
+    def test_the_key_value_tables_are_auxiliary_tables(self) -> None:
+        root = self.show(self.full_item())
+        found = root.find_all("table", cls="kv-table")
+        self.assertTrue(found)
+        for one in found:
+            self.assertIn("aux-table", one.classes)
+
+    def test_the_vessel_table_keys_its_amounts_and_dates(self) -> None:
+        root = self.show(self.full_item())
+        grids = [t for t in root.find_all("table")
+                 if "Menge" in grid(t)[0] and "Gefäß" in grid(t)[0]]
+        self.assertEqual(len(grids), 1)
+        _, rows = grid(grids[0])
+        keys = {row["Menge"].text(): row["Menge"].get("data-sort")
+                for row in rows}
+        self.assertEqual({k: key_number(v) for k, v in keys.items()},
+                         {"50 mg": Decimal(50), "1 g": Decimal(1000)})
+        dated = {row["Menge"].text(): row["Datum"] for row in rows}
+        self.assertEqual(dated["50 mg"].get("data-sort"), "2026-05-01")
+        self.assertEqual(dated["50 mg"].text(), "01.05.2026")
+        self.assertEqual(dated["1 g"].text(), "")
+        self.assertNotRegex(dated["1 g"].get("data-sort") or "",
+                            ISO_DATE.pattern)
+
+    def test_every_id_is_unique_on_the_page(self) -> None:
+        root = self.show(self.full_item())
+        ids = [e.get("id") for e in root.walk() if e.get("id")]
+        self.assertEqual(len(ids), len(set(ids)))
+        for found in root.find_all("table", attrs={"data-sortable": True}):
+            self.assertTrue(found.get("id"))
 
 
 class ForecastWidgetTests(ItemPageCase):

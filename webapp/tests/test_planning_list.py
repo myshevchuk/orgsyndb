@@ -1,28 +1,37 @@
 """Tests of the planning list (production-planning: Planning list):
-the list widget, its filters and the parameters widget; the inspector is
-in ``test_planning_inspector``."""
+its main table, its filter form, its order, its selection and its
+parameters widget; the details of an article are in
+``test_planning_inspector``."""
 
-import math
 from datetime import date, timedelta
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from tasks.models import Task
 
-from . import (Element, field_value, make_task, page, task_form_data)
+from . import Element, field_value, make_task, page, task_form_data
 from .collection_support import accept
 from .inventory_support import (VESSELS, TODAY, has_number,
                                 item_url, num)
-from .planning_support import (COLUMNS_DE, COLUMNS_EN, FILTERS_DE,
-                               FILTERS_EN, PARAMETERS_TITLES, PLAN, WINDOW,
-                               PlanningCase, blocks, has_date, has_word,
-                               list_table, list_widget, rows_by_article,
-                               task_texts)
-from .widget_support import (count_of, grid, kv_rows, title_of, widget,
-                             widgets)
+from .main_lists_support import (head_of, hidden_fields, query_of, rows_of)
+from .planning_support import (COLUMNS_DE, COLUMNS_EN, HTMX, PARAMETERS_TITLES,
+                               PLAN, SHOW_DE, SHOW_EN, SHOW_VALUES, WINDOW,
+                               PlanningCase, detail_url, has_date, has_word,
+                               list_table, pane_of, priority_of,
+                               rows_by_article, task_texts)
+from .test_inventory_dialogs import RESTORE, vary_of
+from .test_inventory_live_lists import LiveListAssertions
+from .widget_support import grid, kv_rows, title_of, widget, widgets
 
 CHECK_DE = "Bulk prüfen"
 PLAN_DE = "Synthese planen"
 NEW_TASK = "/lab/tasks/new/"
+FORM_OOB = ["#planning-count:morph", "#item-head:morph",
+            "#item-detail:morph", "#filter-selected:morph"]
+LINK_OOB = ["#planning-count:morph", "#item-head:morph",
+            "#item-detail:morph", "#filters:morph"]
+NO_MATCH = "Keine Zeile passt zum Filter."
+URGENT = "Kein Artikel braucht eine Synthese oder eine andere Maßnahme."
+EVERY = "Kein Artikel hat eine Prognose."
 
 
 class ListCase(PlanningCase):
@@ -79,8 +88,8 @@ class SelectionTests(ListCase):
                          ["NV-10", "NV-15", "NV-25"])
 
 
-class ListWidgetTests(ListCase):
-    """The list as the widget ``Planungsliste``."""
+class MainTableTests(ListCase):
+    """The list as a main table in the split layout."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -88,25 +97,57 @@ class ListWidgetTests(ListCase):
         self.planned_item("NV-15", quantity=15)
         self.planned_item("NV-10", quantity=10)
 
-    def test_the_list_is_a_widget_with_a_sortable_table(self) -> None:
-        found = list_widget(self.get(PLAN))
-        self.assertEqual(found.tag, "section")
-        self.assertEqual(title_of(found), "Planungsliste")
-        tables = found.find_all("table")
-        self.assertEqual(len(tables), 1)
-        self.assertIn("data-sortable", tables[0].attrs)
-        self.assertTrue(tables[0].get("id"))
+    def test_the_list_is_a_main_table_in_the_split_layout(self) -> None:
+        root = self.get(PLAN)
+        found = list_table(root)
+        self.assertEqual(len(root.find_all("table", cls="main-table")), 1)
+        layout = root.find("div", cls="item-layout")
+        self.assertIsNotNone(layout)
+        self.assertIn(found, list(layout.walk()))
+        self.assertIn(pane_of(root), list(layout.walk()))
+        self.assertIs(rows_of(root).closest("table"), found)
+        self.assertIs(head_of(root).closest("table"), found)
+        self.assertIn("lab-frame", root.find("body").classes)
 
-    def test_the_count_is_the_number_of_rows(self) -> None:
-        self.assertEqual(count_of(list_widget(self.get(PLAN))), 2)
-        self.assertEqual(count_of(list_widget(self.get(PLAN + "?all=1"))), 3)
+    def test_the_list_is_no_widget(self) -> None:
+        root = self.get(PLAN)
+        shown = [title_of(w) for w in widgets(root)]
+        self.assertNotIn("Planungsliste", shown)
+        node = list_table(root).parent
+        while node is not None:
+            self.assertNotIn("widget", node.classes)
+            node = node.parent
 
-    def test_no_header_carries_aria_sort_and_the_rows_keep_slack_order(
-            self) -> None:
+    def test_the_main_table_carries_no_script_attributes(self) -> None:
         root = self.get(PLAN + "?all=1")
         found = list_table(root)
-        self.assertEqual([e for e in found.walk() if "aria-sort" in e.attrs],
-                         [])
+        self.assertNotIn("data-sortable", found.attrs)
+        for name in ("data-article", "data-priority", "data-action",
+                     "data-late"):
+            with self.subTest(attribute=name):
+                self.assertEqual(
+                    root.find_all(attrs={name: True}), [])
+        self.assertEqual(found.find_all(attrs={"data-sortable": True}), [])
+
+    def test_the_count_is_the_number_of_rows(self) -> None:
+        for query, rows in (("", 2), ("?all=1", 3), ("?all=1&show=high", 1)):
+            with self.subTest(query=query):
+                root = self.get(PLAN + query)
+                self.assertEqual(root.find("h1").text(), "Planung")
+                count = root.find(id="planning-count")
+                self.assertIsNotNone(count)
+                self.assertEqual(num(count), rows)
+                self.assertRegex(root.find("h1").parent.text(),
+                                 rf"Planung\D{{0,5}}{rows}\b")
+
+    def test_the_default_order_is_marked_in_the_latest_start(self) -> None:
+        root = self.get(PLAN + "?all=1")
+        header, _ = grid(list_table(root))
+        marks = {cell.text(): cell.get("aria-sort") for cell in
+                 head_of(root).find_all("th")}
+        self.assertEqual(marks["Spätester Start"], "ascending")
+        self.assertEqual([name for name, mark in marks.items() if mark],
+                         ["Spätester Start"])
         self.assertEqual(list(rows_by_article(root)),
                          ["NV-10", "NV-15", "NV-25"])
 
@@ -116,9 +157,7 @@ class ListWidgetTests(ListCase):
 
     def test_english_columns(self) -> None:
         accept(language="en")
-        root = self.get(PLAN)
-        self.assertEqual(title_of(list_widget(root)), "Planning list")
-        header, _ = grid(list_table(root))
+        header, _ = grid(list_table(self.get(PLAN)))
         self.assertEqual(header, COLUMNS_EN)
 
     def test_every_row_has_a_cell_for_each_column(self) -> None:
@@ -130,83 +169,332 @@ class ListWidgetTests(ListCase):
 
     def test_the_old_markup_is_gone(self) -> None:
         root = self.get(PLAN)
-        for name in ("lab-parameters", "planning-cell"):
+        for name in ("lab-parameters", "planning-cell", "planning-grid",
+                     "planning-filters", "planning-inspector",
+                     "planning-block", "planning-select", "planning-table",
+                     "planning-list"):
             with self.subTest(cls=name):
                 self.assertEqual(root.find_all(cls=name), [])
 
-    def test_the_list_comes_before_the_inspector_and_the_parameters(
-            self) -> None:
+    def test_a_row_requests_the_details_of_its_article(self) -> None:
+        rows = rows_by_article(self.get(PLAN))
+        for article, row in rows.items():
+            with self.subTest(article=article):
+                self.assertEqual(row.element.get("data-item"), article)
+                self.assertEqual(row.element.get("hx-trigger"),
+                                 "item-select")
+                self.assertEqual(urlsplit(row.element.get("hx-get")).path,
+                                 detail_url(article))
+
+    def test_the_list_comes_before_the_parameters(self) -> None:
         root = self.get(PLAN)
         walked = list(root.walk())
-        first = walked.index(list_widget(root))
-        self.assertLess(first, walked.index(widget(root, *PARAMETERS_TITLES)))
-        for article, found in blocks(root).items():
-            with self.subTest(article=article):
-                self.assertLess(first, walked.index(found))
+        self.assertLess(walked.index(list_table(root)),
+                        walked.index(widget(root, *PARAMETERS_TITLES)))
+        self.assertNotIn(widget(root, *PARAMETERS_TITLES),
+                         list(pane_of(root).walk()))
 
-    def test_the_list_and_the_inspector_share_one_grid(self) -> None:
-        root = self.get(PLAN)
-        grids = root.find_all(cls="planning-grid")
-        self.assertEqual(len(grids), 1)
-        inside = list(grids[0].walk())
-        self.assertTrue(any(list_widget(root) is node for node in inside))
-        self.assertEqual(sorted(blocks(root)), ["NV-10", "NV-15"])
-        for article, found in blocks(root).items():
-            with self.subTest(article=article):
-                self.assertTrue(any(found is node for node in inside))
+    def test_the_planning_list_opens_in_the_details_view(self) -> None:
+        layout = self.get(PLAN).find("div", cls="item-layout")
+        self.assertIsNotNone(layout)
+        self.assertEqual(layout.get("data-view"), "details")
+
+    def test_the_parameters_widget_stays_when_nothing_is_listed(
+            self) -> None:
+        for query in ("?show=late", "?all=1&show=late"):
+            with self.subTest(query=query):
+                self.assertIsNotNone(
+                    widget(self.get(PLAN + query), *PARAMETERS_TITLES))
 
 
-class FilterTests(ListCase):
-    """The filter buttons, which the script reveals."""
+class FilterFormTests(LiveListAssertions, ListCase):
+    """The filter form: the choice ``Anzeigen`` and the check box
+    ``Alle Artikel``."""
 
     def setUp(self) -> None:
         super().setUp()
         self.planned_item("NV-10", quantity=10)
         self.planned_item("NV-15", quantity=15)
 
-    def buttons(self, root: Element) -> list[Element]:
-        return list_widget(root).find_all("button")
+    def form(self, query: str = "", **extra: str) -> tuple[Element, Element]:
+        root = page(self.client.get(PLAN + query, **extra))
+        form = root.find("form", id="filters")
+        self.assertIsNotNone(form)
+        return root, form
 
-    def group(self, root: Element) -> Element:
-        """The nearest ancestor of the first button that carries
-        ``hidden``, inside the widget."""
-        found = list_widget(root)
-        node = self.buttons(root)[0].parent
-        while node is not found and "hidden" not in node.attrs:
-            node = node.parent
-        self.assertIn("hidden", node.attrs,
-                      "the buttons are in no group that carries hidden")
-        return node
+    def test_the_form_is_a_get_form_with_a_submit_button(self) -> None:
+        _, form = self.form()
+        self.assertEqual(form.get("method"), "get")
+        self.assertEqual(form.get("action"), PLAN)
+        self.assertIsNotNone(form.find("button", type="submit"))
 
-    def test_four_buttons_in_the_order_of_the_spec(self) -> None:
-        root = self.get(PLAN)
-        self.assertEqual([b.text() for b in self.buttons(root)], FILTERS_DE)
+    def test_the_choice_offers_four_filters(self) -> None:
+        _, form = self.form()
+        select = form.find("select", name="show")
+        self.assertIsNotNone(select)
+        options = select.find_all("option")
+        self.assertEqual([o.text() for o in options], SHOW_DE)
+        self.assertEqual([o.get("value") for o in options], SHOW_VALUES)
+        label = select.closest("label")
+        self.assertIsNotNone(label)
+        self.assertIn("Anzeigen", label.text())
 
-    def test_the_english_buttons(self) -> None:
+    def test_the_choice_in_english(self) -> None:
         accept(language="en")
-        root = self.get(PLAN)
-        self.assertEqual([b.text() for b in self.buttons(root)], FILTERS_EN)
+        _, form = self.form()
+        select = form.find("select", name="show")
+        self.assertEqual([o.text() for o in select.find_all("option")],
+                         SHOW_EN)
 
-    def test_the_group_is_hidden_until_the_script_reveals_it(self) -> None:
-        root = self.get(PLAN)
-        group = self.group(root)
-        inside = list(group.walk())
-        for found in self.buttons(root):
-            with self.subTest(button=found.text()):
-                self.assertTrue(any(found is node for node in inside))
+    def test_the_form_keeps_the_values(self) -> None:
+        for query, shown, ticked in (
+                ("", "", ""), ("?show=high", "high", ""),
+                ("?all=1&show=late", "late", "on"),
+                ("?show=bogus", "", ""), ("?all=1", "", "on")):
+            with self.subTest(query=query):
+                root, _ = self.form(query)
+                self.assertEqual(field_value(root, "show"), shown)
+                self.assertEqual(field_value(root, "all"), ticked)
 
-    def test_all_is_active_when_the_page_loads(self) -> None:
-        root = self.get(PLAN)
-        self.assertEqual([b.get("aria-pressed") for b in self.buttons(root)],
-                         ["true", "false", "false", "false"])
+    def test_the_check_box_is_named_all_articles(self) -> None:
+        _, form = self.form()
+        box = form.find("input", name="all")
+        self.assertEqual((box.get("type"), box.get("value")),
+                         ("checkbox", "1"))
+        self.assertIn("Alle Artikel", box.closest("label").text())
 
-    def test_every_row_shows_without_the_script(self) -> None:
+    def test_the_form_is_live(self) -> None:
+        root, form = self.form()
+        entries = self.assert_live_element(
+            form, root, expected_get=PLAN, target="#item-rows",
+            required_oob=set(FORM_OOB))
+        self.assertEqual(entries, FORM_OOB)
+        self.assertEqual(
+            form.get("hx-trigger"),
+            "submit, change target:(select, input[type=checkbox])")
+        self.assert_scoped_triggers(form, has_search=False, has_select=True,
+                                    has_checkbox=True)
+        self.assertIsNotNone(root.find(id="planning-count"))
+
+    def test_the_header_links_update_the_list_in_place(self) -> None:
+        root, _ = self.form()
+        links = head_of(root).find_all("a")
+        self.assertEqual(len(links), 6)
+        for link in links:
+            with self.subTest(link=link.text()):
+                entries = self.assert_live_element(
+                    link, root, expected_get=link.get("href"),
+                    target="#item-rows", required_oob=set(LINK_OOB))
+                self.assertEqual(entries, LINK_OOB)
+
+    def test_the_header_links_keep_the_filters_and_the_selection(
+            self) -> None:
+        root = self.get(PLAN + "?all=1&show=high&selected=NV-15")
+        links = head_of(root).find_all("a")
+        self.assertTrue(links)
+        for link in links:
+            with self.subTest(link=link.text()):
+                found = query_of(link.get("href"))
+                self.assertEqual(found.get("all"), ["1"])
+                self.assertEqual(found.get("show"), ["high"])
+                self.assertEqual(found.get("selected"), ["NV-10"])
+
+    def test_the_form_holds_the_order_unless_it_is_the_default(self) -> None:
+        for query, held in (
+                ("", {}), ("?sort=start", {}), ("?sort=nothing", {}),
+                ("?sort=priority", {"sort": "priority"}),
+                ("?sort=priority&dir=desc",
+                 {"sort": "priority", "dir": "desc"}),
+                ("?sort=start&dir=desc", {"sort": "start", "dir": "desc"})):
+            with self.subTest(query=query):
+                fields = hidden_fields(self.get(PLAN + query))
+                found = {name: value for name, value in fields.items()
+                         if name in ("sort", "dir")}
+                self.assertEqual(found, held)
+
+    def test_the_old_filter_buttons_and_link_are_gone(self) -> None:
+        root = self.get(PLAN)
+        self.assertEqual(root.find_all("button",
+                                       attrs={"data-plan-filter": True}), [])
+        self.assertEqual(root.find_all(cls="planning-filter"), [])
+        texts = {a.text() for a in root.find("main").find_all("a")}
+        for gone in ("Alle Artikel", "Nur dringende Artikel"):
+            self.assertNotIn(gone, texts)
+        accept(language="en")
+        texts = {a.text() for a in self.get(PLAN).find("main").find_all("a")}
+        for gone in ("All articles", "Urgent articles only"):
+            self.assertNotIn(gone, texts)
+
+
+class ServerFilterTests(ListCase):
+    """The choice ``Anzeigen``, which filters on the server."""
+
+    def three(self) -> None:
+        """``NV-5`` of high priority with a late task, ``NV-10`` of high
+        priority with neither an action nor a late task, and ``NV-1`` of
+        low priority with an action."""
+        self.planned_item("NV-5", quantity=5)
+        self.running("NV-5", 3)
+        self.planned_item("NV-10", quantity=10)
+        self.running("NV-10", 14)
+        self.planned_item("NV-1", quantity=1)
+        self.vessel("NV-1", "mg", "20")
+
+    def test_filters_on_the_server(self) -> None:
+        """Scenario: Filters on the server."""
+        self.three()
+        every = self.shown("?all=1")
+        self.assertEqual(sorted(every), ["NV-1", "NV-10", "NV-5"])
+        for show, wanted in (("high", {"NV-10", "NV-5"}),
+                             ("action", {"NV-1"}),
+                             ("late", {"NV-5"}),
+                             ("bogus", {"NV-1", "NV-10", "NV-5"}),
+                             ("", {"NV-1", "NV-10", "NV-5"})):
+            with self.subTest(show=show):
+                root = self.get(PLAN + f"?all=1&show={show}")
+                rows = list(rows_by_article(root))
+                self.assertEqual(set(rows), wanted)
+                self.assertEqual(rows, [a for a in every if a in wanted])
+                self.assertEqual(num(root.find(id="planning-count")),
+                                 len(wanted))
+
+    def test_the_choice_works_without_all(self) -> None:
+        self.three()
+        self.assertEqual(self.shown("?show=late"), ["NV-5"])
+        self.assertEqual(self.shown("?show=action"), ["NV-1"])
+        self.assertEqual(sorted(self.shown("?show=high")),
+                         ["NV-10", "NV-5"])
+
+    def test_a_filter_that_matches_no_row(self) -> None:
+        """Scenario: A filter that matches no row."""
+        self.planned_item("NV-15", quantity=15)
+        self.assertEqual(self.shown(), ["NV-15"])
+        for extra in ({}, HTMX):
+            with self.subTest(htmx=bool(extra)):
+                root = page(self.client.get(PLAN + "?show=late", **extra))
+                body = rows_of(root)
+                rows = body.find_all("tr")
+                self.assertEqual(len(rows), 1)
+                cells = rows[0].find_all(("td", "th"))
+                self.assertEqual(len(cells), 1)
+                self.assertEqual(cells[0].text(), NO_MATCH)
+                self.assertEqual(cells[0].get("colspan"), "7")
+                self.assertNotIn("data-item", rows[0].attrs)
+                self.assertEqual(rows_by_article(root), {})
+                found = pane_of(root)
+                self.assertNotIn("data-item", found.attrs)
+                self.assertNotIn("Gebinde & Bedarf", found.text())
+                self.assertEqual(num(root.find(id="planning-count")), 0)
+
+
+class SortingTests(ListCase):
+    """The list sorts on the server."""
+
+    NAMES = {"NV-10": "Zeta", "NV-15": "Alpha", "NV-25": "Mid"}
+
+    def setUp(self) -> None:
+        super().setUp()
+        for article, quantity in (("NV-25", 25), ("NV-15", 15),
+                                  ("NV-10", 10)):
+            self.planned_item(article, quantity=quantity,
+                              name=self.NAMES[article])
+
+    def order(self, query: str) -> list[str]:
+        return list(rows_by_article(self.get(PLAN + "?all=1" + query)))
+
+    def expected(self, key, descending: bool = False) -> list[str]:
+        """The articles in the default order, sorted by KEY, rows of
+        equal key keeping that order."""
+        default = self.order("")
+        return sorted(default, key=key, reverse=descending)
+
+    def test_by_the_article_name(self) -> None:
+        self.assertEqual(self.order("&sort=article"),
+                         ["NV-15", "NV-25", "NV-10"])
+        self.assertEqual(self.order("&sort=article&dir=desc"),
+                         ["NV-10", "NV-25", "NV-15"])
+
+    def test_by_the_runway_in_days(self) -> None:
+        for descending in (False, True):
+            with self.subTest(descending=descending):
+                query = "&sort=runway" + ("&dir=desc" if descending else "")
+                self.assertEqual(self.order(query), self.expected(
+                    lambda a: self.forecast(a).runway, descending))
+        self.assertEqual(self.order("&sort=runway&dir=desc"),
+                         ["NV-25", "NV-15", "NV-10"])
+
+    def test_by_the_synthesis_time_in_days(self) -> None:
+        self.synthesis("NV-15", 40, TODAY - timedelta(days=100))
+        for descending in (False, True):
+            with self.subTest(descending=descending):
+                query = ("&sort=synthesis"
+                         + ("&dir=desc" if descending else ""))
+                self.assertEqual(self.order(query), self.expected(
+                    lambda a: self.forecast(a).synthesis_days, descending))
+        self.assertEqual(self.order("&sort=synthesis")[-1], "NV-15")
+
+    def test_by_the_latest_start(self) -> None:
+        self.assertEqual(self.order("&sort=start&dir=desc"),
+                         ["NV-25", "NV-15", "NV-10"])
+        self.assertEqual(self.order("&sort=start"),
+                         ["NV-10", "NV-15", "NV-25"])
+
+    def test_by_the_priority_rank(self) -> None:
+        self.assertEqual(self.order("&sort=priority"),
+                         ["NV-10", "NV-15", "NV-25"])
+        self.assertEqual(self.order("&sort=priority&dir=desc"),
+                         ["NV-25", "NV-15", "NV-10"])
+
+    def test_equal_priorities_keep_the_default_order(self) -> None:
+        self.planned_item("NV-12", quantity=12)
+        self.planned_item("NV-11", quantity=11)
+        default = self.order("")
+        for query in ("&sort=priority", "&sort=priority&dir=desc"):
+            with self.subTest(query=query):
+                rows = rows_by_article(self.get(PLAN + "?all=1" + query))
+                by_priority: dict[str, list[str]] = {}
+                for article, row in rows.items():
+                    by_priority.setdefault(priority_of(row), []).append(
+                        article)
+                for group in by_priority.values():
+                    self.assertEqual(
+                        group, [a for a in default if a in group])
+
+    def test_by_the_first_task_with_articles_without_one_last(self) -> None:
+        first = make_task(self.kl, substance="NV-25")
+        second = make_task(self.kl, substance="NV-10")
+        self.assertLess(first.number, second.number)
+        self.assertEqual(self.order("&sort=tasks"),
+                         ["NV-25", "NV-10", "NV-15"])
+        self.assertEqual(self.order("&sort=tasks&dir=desc"),
+                         ["NV-10", "NV-25", "NV-15"])
+
+    def test_the_actions_do_not_sort(self) -> None:
+        self.assertEqual(self.order("&sort=actions"), self.order(""))
         root = self.get(PLAN + "?all=1")
-        rows = rows_by_article(root)
-        self.assertTrue(rows)
-        for article, row in rows.items():
-            with self.subTest(article=article):
-                self.assertNotIn("hidden", row.element.attrs)
+        cell = next(c for c in head_of(root).find_all("th")
+                    if c.text() == "Maßnahmen")
+        self.assertIsNone(cell.find("a"))
+
+    def test_the_order_in_force_is_marked_and_linked(self) -> None:
+        root = self.get(PLAN + "?all=1&sort=priority&dir=desc")
+        marks = {c.text(): c.get("aria-sort") for c in
+                 head_of(root).find_all("th")}
+        self.assertEqual(marks["Priorität"], "descending")
+        self.assertEqual([n for n, m in marks.items() if m], ["Priorität"])
+        link = next(c for c in head_of(root).find_all("th")
+                    if c.text() == "Priorität").find("a")
+        self.assertEqual(query_of(link.get("href")).get("dir"), None)
+        self.assertEqual(query_of(link.get("href")).get("sort"),
+                         ["priority"])
+
+    def test_sorting_keeps_the_selected_article(self) -> None:
+        root = self.get(PLAN + "?all=1&selected=NV-15&sort=priority&dir=desc")
+        marked = [tr.get("data-item") for tr in
+                  rows_of(root).find_all("tr")
+                  if tr.get("aria-current") == "true"]
+        self.assertEqual(marked, ["NV-15"])
+        self.assertEqual(pane_of(root).get("data-item"), "NV-15")
 
 
 class ArticleCellTests(ListCase):
@@ -217,49 +505,22 @@ class ArticleCellTests(ListCase):
         self.assertEqual(len(links), 1, cell.text())
         return links[0]
 
-    def selected(self, href: str, **wanted: list[str]) -> None:
-        shown = urlsplit(href)
-        self.assertEqual((shown.path, shown.fragment), (PLAN, ""), href)
-        self.assertEqual(parse_qs(shown.query), wanted, href)
-
-    def test_the_name_links_the_selection_and_the_number_stands_by(
+    def test_the_name_links_the_substance_and_the_number_stands_by(
             self) -> None:
         self.planned_item("NV-1", quantity=10, name="Probe Eins")
         cell = self.articles()["NV-1"]["Artikel"]
-        self.selected(self.link_of(cell, "Probe Eins").get("href"),
-                      selected=["NV-1"])
+        link = self.link_of(cell, "Probe Eins")
+        self.assertEqual(link.get("href"), "/lab/registry/substances/nv-1/")
         self.assertTrue(has_word(cell.text(), "NV-1"), cell.text())
 
-    def test_every_link_of_the_cell_selects_the_article(self) -> None:
+    def test_every_link_of_the_cell_leads_to_the_substance(self) -> None:
         self.planned_item("NV-1", quantity=10, name="Probe Eins")
         cell = self.articles()["NV-1"]["Artikel"]
         links = cell.find_all("a")
         self.assertTrue(links)
         for link in links:
-            with self.subTest(text=link.text()):
-                self.selected(link.get("href"), selected=["NV-1"])
-
-    def test_the_link_keeps_all(self) -> None:
-        self.planned_item("NV-1", quantity=10, name="Probe Eins")
-        self.planned_item("NV-25", quantity=25, name="Probe Fünf")
-        rows = self.articles("?all=1")
-        for article, name in (("NV-1", "Probe Eins"), ("NV-25", "Probe Fünf")):
-            with self.subTest(article=article):
-                self.selected(
-                    self.link_of(rows[article]["Artikel"], name).get("href"),
-                    selected=[article], all=["1"])
-
-    def test_the_number_is_url_encoded(self) -> None:
-        """Article numbers are free text: a space, an ampersand, a plus
-        sign and a number sign must not end the value."""
-        number = "XY 1&2+3#4"
-        self.planned_item(number, quantity=10, name="Sonderfall")
-        rows = self.articles("?all=1")
-        self.assertEqual(list(rows), [number])
-        href = self.link_of(rows[number]["Artikel"], "Sonderfall").get("href")
-        self.selected(href, selected=[number], all=["1"])
-        for raw in (" ", "#"):
-            self.assertNotIn(raw, href)
+            self.assertEqual(link.get("href"),
+                             "/lab/registry/substances/nv-1/")
 
     def test_the_name_is_that_of_the_substance(self) -> None:
         self.item("NV-1", "Erste", "5", "mg", 1)
@@ -269,147 +530,191 @@ class ArticleCellTests(ListCase):
 
     def test_the_name_is_in_the_language_of_the_page(self) -> None:
         self.demo_item()
-        self.link_of(self.articles()["CH-0012"]["Artikel"], "(E)-Zimtsäure")
+        link = self.link_of(self.articles()["CH-0012"]["Artikel"],
+                            "(E)-Zimtsäure")
+        self.assertEqual(link.get("href"),
+                         "/lab/registry/substances/cinnamic-acid/")
         accept(language="en")
         self.link_of(self.articles()["CH-0012"]["Article"],
                      "(E)-Cinnamic acid")
 
-    def test_the_english_link(self) -> None:
-        accept(language="en")
-        self.planned_item("NV-1", quantity=10, name="Probe Eins")
-        cell = self.articles("?all=1")["NV-1"]["Article"]
-        self.selected(self.link_of(cell, "Probe Eins").get("href"),
-                      selected=["NV-1"], all=["1"])
+    def test_the_row_carries_the_lists_all_and_show(self) -> None:
+        self.planned_item("NV-1", quantity=10)
+        for query, wanted in (("?all=1", {"all": ["1"]}),
+                              ("?all=1&show=high",
+                               {"all": ["1"], "show": ["high"]}),
+                              ("?show=high", {"show": ["high"]}),
+                              ("", {}),
+                              ("?show=bogus", {})):
+            with self.subTest(query=query):
+                row = self.articles(query)["NV-1"]
+                self.assertEqual(query_of(row.element.get("hx-get")),
+                                 wanted)
+
+    def test_the_number_is_percent_encoded_as_one_path_segment(
+            self) -> None:
+        """Scenario: An article number with reserved characters."""
+        number = "XY 1&2+3#4/5"
+        self.planned_item(number, quantity=12, name="Sonderfall")
+        selected = quote(number, safe="")
+        root = self.get(f"{PLAN}?all=1&selected={selected}")
+        rows = rows_by_article(root)
+        self.assertEqual(list(rows), [number])
+        row = rows[number]
+        href = row.element.get("hx-get")
+        shown = urlsplit(href)
+        self.assertEqual(shown.path.split("/"),
+                         ["", "lab", "planning", selected, "detail", ""])
+        self.assertEqual(parse_qs(shown.query), {"all": ["1"]})
+        for raw in (" ", "#", "&", "+"):
+            self.assertNotIn(raw, shown.path)
+        self.assertEqual(row.element.get("aria-current"), "true")
+        found = pane_of(root)
+        self.assertEqual(found.get("data-item"), number)
+        self.assertIn("Sonderfall", found.text())
+        response = self.client.get(href, **HTMX)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(pane_of(page(response)).get("data-item"), number)
+        redirect = self.client.get(href)
+        self.assertEqual(redirect.status_code, 302)
+        where = urlsplit(redirect["Location"])
+        self.assertEqual(where.path, PLAN)
+        self.assertEqual(parse_qs(where.query),
+                         {"all": ["1"], "selected": [number]})
+
+    def test_a_selection_by_hand_with_special_characters(self) -> None:
+        number = "XY 1&2+3#4"
+        self.planned_item(number, quantity=12, name="Sonderfall")
+        root = self.get(PLAN + "?all=1&selected=" + quote(number, safe=""))
+        self.assertEqual(pane_of(root).get("data-item"), number)
 
 
-class RowAttributeTests(ListCase):
-    """The attributes the filters read."""
+class SelectedArticleTests(ListCase):
+    """The details follow the selection."""
 
     def setUp(self) -> None:
         super().setUp()
-        self.planned_item("NV-10", quantity=10)
-        self.running("NV-10", 14)
-        self.planned_item("NV-15", quantity=15)
         self.planned_item("NV-25", quantity=25)
-        self.planned_item("NV-1", quantity=1)
-        self.vessel("NV-1", "mg", "20")
+        self.planned_item("NV-15", quantity=15)
+        self.planned_item("NV-10", quantity=10)
+
+    def marked(self, root: Element) -> list[str]:
+        return [article for article, row in rows_by_article(root).items()
+                if row.element.get("aria-current") == "true"]
+
+    def test_the_details_follow_the_selection(self) -> None:
+        """Scenario: The details follow the selection."""
+        root = self.get(PLAN + "?all=1&selected=NV-15")
+        self.assertEqual(self.marked(root), ["NV-15"])
+        self.assertEqual(pane_of(root).get("data-item"), "NV-15")
+        self.assertIn("NV-15", pane_of(root).text())
+        again = self.get(PLAN + "?all=1&selected=XX-0000")
+        self.assertEqual(self.marked(again), ["NV-10"])
+        self.assertEqual(pane_of(again).get("data-item"), "NV-10")
+
+    def test_the_first_row_is_selected_without_a_selection(self) -> None:
+        root = self.get(PLAN + "?all=1")
+        self.assertEqual(self.marked(root), ["NV-10"])
+        self.assertEqual(pane_of(root).get("data-item"), "NV-10")
+
+    def test_the_order_of_selected_and_all_is_free(self) -> None:
+        root = self.get(PLAN + "?selected=NV-15&all=1")
+        self.assertEqual(pane_of(root).get("data-item"), "NV-15")
+
+    def test_a_selection_the_list_lacks_falls_back_to_the_first_row(
+            self) -> None:
+        """NV-25 has a forecast, but it is not listed without ``all``."""
+        root = self.get(PLAN + "?selected=NV-25")
+        self.assertEqual(self.marked(root), ["NV-10"])
+        self.assertEqual(pane_of(root).get("data-item"), "NV-10")
+
+    def test_an_empty_selection_falls_back_to_the_first_row(self) -> None:
+        root = self.get(PLAN + "?all=1&selected=")
+        self.assertEqual(pane_of(root).get("data-item"), "NV-10")
+
+    def test_a_selection_must_be_the_article_number_itself(self) -> None:
+        for wrong in ("nv-15", "NV-1", "NV-150"):
+            with self.subTest(selected=wrong):
+                root = self.get(PLAN + "?all=1&selected=" + quote(wrong))
+                self.assertEqual(pane_of(root).get("data-item"), "NV-10")
+
+    def test_only_the_selected_row_carries_aria_current(self) -> None:
+        root = self.get(PLAN + "?all=1&selected=NV-25")
+        marked = [e for e in root.walk() if e.get("aria-current") == "true"]
+        self.assertEqual(len(marked), 1)
+        self.assertIs(marked[0], rows_by_article(root)["NV-25"].element)
+
+    def test_the_selection_is_kept_in_the_filter_form(self) -> None:
+        root = self.get(PLAN + "?all=1&selected=NV-15")
+        form = root.find("form", id="filters")
+        self.assertIsNotNone(form)
+        fields = form.find_all("input", name="selected")
+        self.assertEqual([f.get("value") for f in fields], ["NV-15"])
+        self.assertEqual([f.get("type") for f in fields], ["hidden"])
+
+    def test_without_an_article_the_form_names_no_selection(self) -> None:
+        form = self.get(PLAN + "?show=late").find("form", id="filters")
+        self.assertIsNotNone(form)
+        self.assertEqual(form.find_all("input", name="selected"), [])
+
+
+class CanonicalAddressTests(LiveListAssertions, ListCase):
+    """The address the live list pushes."""
+
+    def setUp(self) -> None:
+        super().setUp()
         self.planned_item("NV-5", quantity=5)
         self.running("NV-5", 3)
-        self.planned_item("NV-7", quantity=7)
-        make_task(self.kl, substance="NV-7")
-        self.vessel("NV-7", "umol", "1000")
-
-    def attributes(self, query: str = "?all=1", signed_in: bool = False
-                   ) -> dict[str, tuple[str | None, ...]]:
-        return {article: tuple(row.element.get(name) for name in (
-            "data-priority", "data-action", "data-late"))
-            for article, row in self.articles(query, signed_in).items()}
-
-    def test_priority_action_and_late(self) -> None:
-        late = self.forecast("NV-7").priority
-        self.assertEqual(self.attributes(), {
-            "NV-10": ("high", None, None),
-            "NV-15": ("medium", "1", None),
-            "NV-25": ("low", None, None),
-            "NV-1": ("low", "1", None),
-            "NV-5": ("high", None, "1"),
-            "NV-7": (late, "1", "1")})
-
-    def test_an_action_is_one_whether_or_not_the_user_may_follow_it(
-            self) -> None:
-        self.assertEqual(self.attributes(signed_in=True),
-                         self.attributes(signed_in=False))
-        self.assertEqual(self.attributes(signed_in=True)["NV-15"][1], "1")
-
-    def test_the_attributes_follow_the_cells(self) -> None:
-        """A row has ``data-action`` when its ``Maßnahmen`` holds an
-        action and ``data-late`` when its ``Aufgaben`` marks a task."""
-        rows = self.articles("?all=1")
-        self.assertEqual(len(rows), 6)
-        for article, row in rows.items():
-            with self.subTest(article=article):
-                self.assertEqual(row.element.get("data-action") == "1",
-                                 row["Maßnahmen"].text() != "–")
-                self.assertEqual(row.element.get("data-late") == "1",
-                                 "verspätet" in row["Aufgaben"].text())
-
-    def test_the_attributes_are_the_same_in_english(self) -> None:
-        german = self.attributes()
-        self.assertEqual(len(german), 6)
-        accept(language="en")
-        self.assertEqual(self.attributes(), german)
-
-
-class SortKeyTests(ListCase):
-    """The ``data-sort`` keys of the list's cells."""
-
-    COLUMNS = ("Reichweite", "Synthesedauer", "Spätester Start", "Priorität")
-
-    def keys(self, query: str = "?all=1") -> dict[str, list[str | None]]:
-        return {article: [row[name].get("data-sort")
-                          for name in self.COLUMNS]
-                for article, row in self.articles(query).items()}
-
-    def test_the_keys_of_an_article(self) -> None:
-        self.planned_item("NV-1", quantity=10)
-        self.assertEqual(self.keys()["NV-1"],
-                         ["60", "21", "2026-11-15", "1"])
-
-    def test_the_keys_are_the_same_in_english(self) -> None:
-        accept(language="en")
-        self.planned_item("NV-1", quantity=10)
-        rows = self.articles("?all=1")
-        self.assertEqual([rows["NV-1"][name].get("data-sort") for name in (
-            "Runway", "Synthesis time", "Latest start", "Priority")],
-            ["60", "21", "2026-11-15", "1"])
-
-    def test_the_priority_rank(self) -> None:
-        self.planned_item("NV-10", quantity=10)
-        self.planned_item("NV-15", quantity=15)
         self.planned_item("NV-25", quantity=25)
-        self.assertEqual({article: found[3] for article, found
-                          in self.keys().items()},
-                         {"NV-10": "1", "NV-15": "2", "NV-25": "3"})
 
-    def test_the_runway_is_rounded_down_not_to_the_nearest(self) -> None:
-        rounded_up = 0
-        for quantity in range(2, 12):
-            self.planned_item(f"NV-{quantity}", quantity=quantity)
-        for article, found in self.keys().items():
-            runway = self.forecast(article).runway
-            with self.subTest(article=article, runway=runway):
-                self.assertEqual(found[0], str(math.floor(runway)))
-            rounded_up += round(runway) != math.floor(runway)
-        self.assertGreater(rounded_up, 0, "no runway has a fraction of "
-                           "one half or more; the test checks nothing")
+    def test_the_canonical_address(self) -> None:
+        """Scenario: The canonical address."""
+        res = self.client.get(
+            PLAN + "?all=1&show=late&sort=priority&dir=desc", **HTMX)
+        self.assert_push_url(
+            res, PLAN,
+            {"all": "1", "show": "late", "sort": "priority", "dir": "desc",
+             "selected": "NV-5"},
+            exact_url=(PLAN + "?all=1&show=late&sort=priority&dir=desc"
+                       "&selected=NV-5"))
+        res = self.client.get(PLAN + "?show=bogus&sort=start", **HTMX)
+        self.assert_push_url(res, PLAN, {"selected": "NV-5"},
+                             exact_url=PLAN + "?selected=NV-5")
 
-    def test_the_synthesis_time_is_in_whole_days(self) -> None:
-        self.planned_item("NV-1", quantity=10)
-        for days in (30, 35, 40):
-            self.synthesis("NV-1", days, TODAY - timedelta(days=days * 3))
-        self.assertEqual(self.keys()["NV-1"][1], "40")
+    def test_an_empty_list_pushes_no_selection(self) -> None:
+        res = self.client.get(PLAN + "?show=action&all=1&selected=NV-5",
+                              **HTMX)
+        self.assert_push_url(res, PLAN, {"all": "1", "show": "action"},
+                             exact_url=PLAN + "?all=1&show=action")
+        res = self.client.get(PLAN + "?show=action&sort=start", **HTMX)
+        self.assertEqual(res["HX-Push-Url"], PLAN + "?show=action")
 
-    def test_a_missing_latest_start_is_a_dash_and_the_runway_digits(
-            self) -> None:
-        item = self.item("NV-9", "NV-9", "1", "mg", 10)
-        for year, quarter in WINDOW:
-            self.enter(item, year, quarter,
-                       1 if (year, quarter) == WINDOW[-5] else 0)
-        self.vessel("NV-9", "mg", "3000")
-        found = self.forecast("NV-9")
-        self.assertIsNone(found.latest_start)
-        runway, _, start, _ = self.keys()["NV-9"]
-        self.assertEqual(start, "–")
-        self.assertRegex(runway, r"\A\d+\Z")
-        self.assertEqual(runway, str(math.floor(found.runway)))
+    def test_the_default_order_is_not_pushed(self) -> None:
+        for query, pushed in (
+                ("?sort=start", "?selected=NV-5"),
+                ("?sort=start&dir=desc", "?sort=start&dir=desc&selected=NV-5"),
+                ("?sort=article", "?sort=article&selected=NV-5"),
+                ("?sort=actions", "?selected=NV-5")):
+            with self.subTest(query=query):
+                res = self.client.get(PLAN + query, **HTMX)
+                self.assertEqual(res["HX-Push-Url"], PLAN + pushed)
 
-    def test_the_keys_are_numbers_and_dates_not_text(self) -> None:
-        self.planned_item("NV-1", quantity=10)
-        runway, synthesis, start, priority = self.keys()["NV-1"]
-        self.assertRegex(runway, r"\A\d+\Z")
-        self.assertRegex(synthesis, r"\A\d+\Z")
-        self.assertRegex(start, r"\A\d{4}-\d{2}-\d{2}\Z")
-        self.assertRegex(priority, r"\A[123]\Z")
+    def test_restore_and_plain_requests_push_nothing(self) -> None:
+        query = "?all=1&show=late"
+        htmx, restore, plain = (self.client.get(PLAN + query, **extra)
+                                for extra in (HTMX, RESTORE, {}))
+        self.assertIn("HX-Push-Url", htmx)
+        self.assertNotIn("HX-Push-Url", restore)
+        self.assertNotIn("HX-Push-Url", plain)
+        for res in (htmx, restore, plain):
+            self.assertLessEqual({"hx-request", "hx-history-restore-request"},
+                                 vary_of(res))
+            root = page(res)
+            self.assertIsNotNone(root.find("html"))
+            self.assertIsNotNone(root.find("main", id="main"))
+            self.assertIsNotNone(root.find("form", id="filters"))
+
+
 
 
 class RowValueTests(ListCase):
@@ -882,60 +1187,81 @@ class CreatedTaskTests(ListCase):
 
 
 class EmptyListTests(ListCase):
-    URGENT = "Kein Artikel braucht eine Synthese oder eine andere Maßnahme."
-    EVERY = "Kein Artikel hat eine Prognose."
+    """The row that says why the list has none."""
 
-    def message(self, query: str = "") -> str:
-        return self.get(PLAN + query).find("main").text()
-
-    def assertNoList(self, query: str = "") -> None:
+    def assertMessage(self, query: str, message: str,
+                      language: str = "de") -> None:
         root = self.get(PLAN + query)
-        self.assertEqual(
-            root.find_all("table", attrs={"data-sortable": True}), [])
+        body = rows_of(root)
+        rows = body.find_all("tr")
+        self.assertEqual(len(rows), 1, query)
+        cells = rows[0].find_all(("td", "th"))
+        self.assertEqual(len(cells), 1)
+        self.assertEqual(cells[0].text(), message)
+        self.assertEqual(cells[0].get("colspan"), "7")
+        self.assertNotIn("data-item", rows[0].attrs)
         self.assertEqual(rows_by_article(root), {})
-        self.assertEqual(root.find_all(attrs={"data-article": True}), [])
-        shown = [title_of(w) for w in widgets(root)]
-        for title in ("Gebinde & Bedarf", "Planungsdetails"):
-            self.assertNotIn(title, shown)
+        found = pane_of(root)
+        self.assertNotIn("data-item", found.attrs)
+        self.assertTrue(found.text())
+        self.assertNotIn("Gebinde & Bedarf", found.text())
+        self.assertIsNotNone(list_table(root))
+        self.assertEqual(num(root.find(id="planning-count")), 0)
 
     def test_an_empty_inventory_lists_nothing(self) -> None:
-        self.assertNoList()
-        self.assertNoList("?all=1")
+        self.assertMessage("", URGENT)
+        self.assertMessage("?all=1", EVERY)
 
     def test_the_message_of_the_urgent_list(self) -> None:
-        self.assertIn(self.URGENT, self.message())
-        self.assertNotIn(self.EVERY, self.message())
+        self.assertMessage("", URGENT)
+        self.assertNotIn(EVERY, self.get(PLAN).find("main").text())
 
     def test_the_message_of_the_list_of_all(self) -> None:
-        self.assertIn(self.EVERY, self.message("?all=1"))
-        self.assertNotIn(self.URGENT, self.message("?all=1"))
+        self.assertMessage("?all=1", EVERY)
+        self.assertNotIn(URGENT, self.get(PLAN + "?all=1").find("main").text())
 
-    def test_nothing_urgent_leaves_no_table_and_no_inspector(self) -> None:
+    def test_nothing_urgent_leaves_the_message(self) -> None:
         self.planned_item("NV-25", quantity=25)
-        self.assertNoList()
-        self.assertIn(self.URGENT, self.message())
+        self.assertMessage("", URGENT)
         self.assertEqual(self.shown("?all=1"), ["NV-25"])
-        self.assertNotIn(self.EVERY, self.message("?all=1"))
 
     def test_an_article_without_a_forecast_is_no_row(self) -> None:
         self.item("NV-0", size="1", unit="mg", quantity=10)
-        self.assertNoList("?all=1")
-        self.assertIn(self.EVERY, self.message("?all=1"))
+        self.assertMessage("?all=1", EVERY)
+
+    def test_a_filter_the_list_survives_without_says_so(self) -> None:
+        self.planned_item("NV-15", quantity=15)
+        self.planned_item("NV-25", quantity=25)
+        self.assertMessage("?show=late", NO_MATCH)
+        self.assertMessage("?all=1&show=late", NO_MATCH)
+        self.assertMessage("?show=high", NO_MATCH)
+
+    def test_a_filter_on_a_list_without_a_row_gives_the_plain_message(
+            self) -> None:
+        self.assertMessage("?show=late", URGENT)
+        self.assertMessage("?all=1&show=late", EVERY)
+        self.planned_item("NV-25", quantity=25)
+        self.assertMessage("?show=late", URGENT)
 
     def test_the_messages_are_not_shown_with_rows(self) -> None:
         self.planned_item("NV-10", quantity=10)
-        for query in ("", "?all=1"):
+        for query in ("", "?all=1", "?show=high"):
             with self.subTest(query=query):
-                text = self.message(query)
-                self.assertNotIn(self.URGENT, text)
-                self.assertNotIn(self.EVERY, text)
+                text = self.get(PLAN + query).find("main").text()
+                for message in (URGENT, EVERY, NO_MATCH):
+                    self.assertNotIn(message, text)
 
     def test_the_english_messages(self) -> None:
         accept(language="en")
-        self.assertIn("No article needs a synthesis or another action.",
-                      self.message())
-        self.assertIn("No article has a forecast.", self.message("?all=1"))
-        self.assertNoList()
+        self.assertMessage(
+            "", "No article needs a synthesis or another action.")
+        self.assertMessage("?all=1", "No article has a forecast.")
+        self.planned_item("NV-15", quantity=15)
+        self.assertMessage("?show=late", "No row matches the filter.")
+
+    def test_the_parameters_stay(self) -> None:
+        self.assertIsNotNone(
+            widget(self.get(PLAN), *PARAMETERS_TITLES))
 
 
 class PageTests(ListCase):

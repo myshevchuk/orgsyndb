@@ -3,11 +3,11 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span id="bulk-count" class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="bulk-count" class="lab-count" data-refresh>{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Search" as search_label %}{% translate "Name, article no., batch" as search_placeholder %}{% translate "Location" as location_label %}{% translate "Source" as source_label %}{% translate "Flasks only" as flask_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/bulk/" :selected="selected" hx-get="/lab/inventory/end-products/bulk/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:(select, input[type=checkbox])" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#bulk-count:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
+{% translate "Search" as search_label %}{% translate "Name, article no., batch" as search_placeholder %}{% translate "Location" as location_label %}{% translate "Source" as source_label %}{% translate "Flasks only" as flask_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/bulk/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/inventory/end-products/bulk/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:(select, input[type=checkbox])" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#bulk-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
 <c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" />
 <c-filter-select name="location" :label="location_label">
@@ -22,11 +22,11 @@
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
 <c-split-layout :view="view" cookie="bulk-list-view">
-<table class="inventory-table item-table bulk-table">
-<thead>
-<tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Fills" context "bulk" %}</th></tr>
+<table class="main-table bulk-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#bulk-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for row in rows %}{% with vessel=row.vessel batch=row.vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/end-products/bulk/{{ vessel.pk }}/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}>
 <td><span class="article-number">{{ batch.substance.article.article_number|default_if_none:_("no number") }}</span> {% substance batch.substance %}</td>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
@@ -39,7 +39,7 @@
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
 <header class="detail-head">
 <h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
 <p>{{ batch.substance.article.article_number|default_if_none:_("no number") }} · {{ batch.substance.shown_name }}</p>
@@ -53,7 +53,7 @@
 </dl>
 <p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
 <h3>{% translate "Newest movements" %}</h3>
-<table class="detail-table detail-table--movements">
+<table id="bulk-detail-movements" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Date" %}</th>
 <th scope="col">{% translate "Kind" %}</th>
@@ -62,15 +62,15 @@
 </tr></thead>
 <tbody>
 {% for row in ledger %}<tr>
-<td>{{ row.movement.date }}</td>
+<td data-sort="{{ row.movement.date|date:'Y-m-d' }}">{{ row.movement.date }}</td>
 <td>{{ row.movement.get_kind_display }}</td>
-<td class="number">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
+<td class="number" data-sort="{{ row.movement.amount|base_sort }}">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
 <td>{{ row.movement.note }}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
 </aside>
-{% endwith %}{% else %}<aside id="item-detail" class="item-detail">
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No vessel is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>

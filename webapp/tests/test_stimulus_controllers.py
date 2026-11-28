@@ -12,8 +12,8 @@ from unittest import skipUnless
 
 from django.test import SimpleTestCase, TestCase
 
-from . import (REPO, make_batch, make_item, make_substance, make_user, page,
-               shell_scripts, test_shell)
+from . import (REPO, make_batch, make_item, make_substance, make_task,
+               make_user, make_vessel, page, shell_scripts, test_shell)
 from .inventory_support import NEW_ITEM, NEW_NOTE
 from .planning_support import PLAN, PlanningCase
 
@@ -1358,7 +1358,7 @@ const h = createHarness({
          data-split-list-mode-value="htmx" data-view="table"
          data-cookie="item-list-view">
       <div class="table-scroll">
-        <table class="item-table">
+        <table class="main-table">
           <thead><tr><th><a id="sort-link"
             href="/lab/inventory/end-products/?sort=name&selected=1"
             hx-get="/lab/inventory/end-products/?sort=name&selected=1">Name</a>
@@ -1499,8 +1499,82 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["viewTransitions"], 1)
         self.assertEqual(result["triggersAddedOnReconnectClick"], 1)
 
-    def test_split_list_local_immediate_selection_arrows_and_filters(
-            self) -> None:
+    def test_split_list_selects_the_rows_of_a_main_table(self) -> None:
+        result = run_node_test(r"""
+const h = createHarness({
+  pathname: "/lab/tasks/",
+  bodyHtml: `
+    <div id="layout" class="item-layout" data-controller="split-list"
+         data-split-list-mode-value="htmx" data-view="details"
+         data-cookie="task-list-view">
+      <div class="table-scroll">
+        <table class="main-table" id="main">
+          <thead><tr><th><a id="sort-link"
+            href="/lab/tasks/?sort=number&selected=T-1"
+            hx-get="/lab/tasks/?sort=number&selected=T-1">No.</a>
+          </th></tr></thead>
+          <tbody id="item-rows">
+            <tr id="r1" data-item="T-1" aria-current="true"
+                hx-get="/lab/tasks/T-1/detail/">
+              <td id="c1">One</td></tr>
+            <tr id="r2" data-item="T-2" hx-get="/lab/tasks/T-2/detail/">
+              <td id="c2">Two</td>
+              <td><a id="l2" href="/lab/tasks/T-2/">link</a></td>
+              <td><button id="b2" type="button">button</button></td>
+              <td><label id="lab2">label</label></td>
+              <td><input id="i2" type="checkbox"></td>
+              <td><select id="s2"></select></td>
+              <td><textarea id="t2"></textarea></td></tr>
+            <tr id="r3" data-item="T-3" hx-get="/lab/tasks/T-3/detail/">
+              <td id="c3">Three</td></tr>
+          </tbody>
+        </table>
+        <table class="item-table">
+          <tbody>
+            <tr id="old" data-item="X-1" hx-get="/lab/inventory/x/">
+              <td id="oldc">Old</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <aside id="item-detail" data-item="T-1">Detail 1</aside>
+    </div>
+  `,
+});
+await h.flush();
+const triggers = () => h.htmxCalls.filter((c) => c.kind === "trigger");
+const clicked = (id) => {
+  const before = triggers().length;
+  h.fire(h.doc.getElementById(id), "click", { button: 0 });
+  const found = triggers();
+  return found.length - before === 1
+    ? found[found.length - 1].el.id : null;
+};
+const clicks = {};
+for (const id of ["c2", "l2", "b2", "lab2", "i2", "s2", "t2", "oldc"]) {
+  clicks[id] = clicked(id);
+}
+const before = triggers().length;
+h.fire(h.doc.getElementById("r1"), "keydown", { key: "ArrowDown" });
+const afterDown = triggers().slice(before).map((c) => [c.el.id, c.name]);
+h.fire(h.doc.getElementById("old"), "keydown", { key: "ArrowDown" });
+const afterOld = triggers().length - before - afterDown.length;
+process.stdout.write(JSON.stringify({
+  clicks, afterDown, afterOld,
+  focused: h.doc.activeElement && h.doc.activeElement.id,
+}));
+""")
+        self.assertEqual(result["clicks"], {
+            "c2": "r2", "l2": None, "b2": None, "lab2": None, "i2": None,
+            "s2": None, "t2": None, "oldc": None})
+        self.assertEqual(result["afterDown"], [["r2", "item-select"]])
+        self.assertEqual(result["afterOld"], 0)
+        self.assertEqual(result["focused"], "r2")
+
+    def test_split_list_has_no_local_mode(self) -> None:
+        """The planning list's local mode, its filter buttons, its
+        immediate selection and its blocks are gone: a page that still
+        names the mode keeps its links, its buttons and its rows to the
+        browser."""
         result = run_node_test(r"""
 const h = createHarness({
   pathname: "/lab/planning/",
@@ -1551,110 +1625,34 @@ const h = createHarness({
 await h.flush();
 const filters = h.doc.querySelector(".planning-filters");
 const count = h.doc.querySelector("[data-planning-count]");
-const noMatch = h.doc.querySelector(".planning-no-match");
-const status = h.doc.querySelector(".planning-status");
 const [r1, r2, r3] = ["p-1", "p-2", "p-3"].map(
   (id) => h.doc.getElementById(id));
 const [b1, b2, b3] = ["b-1", "b-2", "b-3"].map(
   (id) => h.doc.getElementById(id));
-
-const filtersRevealed = !filters.hidden;
 const linkEv = h.fire(h.doc.getElementById("sel-2"), "click", { button: 0 });
-const afterClick = {
-  prevented: linkEv.defaultPrevented,
-  r1Current: r1.getAttribute("aria-current"),
-  r2Current: r2.getAttribute("aria-current"),
-  blocksHidden: [b1.hidden, b2.hidden, b3.hidden],
-  focused: h.doc.activeElement === r2,
-  search: h.locationObj.search,
-};
-
 h.fire(r2, "keydown", { key: "ArrowDown" });
-const afterArrow = {
-  r3Current: r3.getAttribute("aria-current"),
-  blocksHidden: [b1.hidden, b2.hidden, b3.hidden],
-  focused: h.doc.activeElement === r3,
-  search: h.locationObj.search,
-};
-
 h.fire(h.doc.querySelector('button[data-plan-filter="action"]'), "click",
        { button: 0 });
-const afterAction = {
-  shown: [r1, r2, r3].map((r) => !r.hidden),
-  count: count.textContent,
-  noMatchHidden: noMatch.hidden,
-  status: status.textContent,
-  r1Current: r1.getAttribute("aria-current"),
-  search: h.locationObj.search,
-};
-
-h.fire(h.doc.querySelector('button[data-plan-filter="late"]'), "click",
-       { button: 0 });
-const afterLate = {
-  shown: [r1, r2, r3].map((r) => !r.hidden),
-  count: count.textContent,
-  r2Current: r2.getAttribute("aria-current"),
-};
-
-h.fire(h.doc.querySelector('button[data-plan-filter="high"]'), "click",
-       { button: 0 });
-const afterHigh = {
-  shown: [r1, r2, r3].map((r) => !r.hidden),
-  count: count.textContent,
-};
-
-r1.setAttribute("data-priority", "low");
-h.fire(h.doc.querySelector('button[data-plan-filter="high"]'), "click",
-       { button: 0 });
-const afterZero = {
-  shown: [r1, r2, r3].map((r) => !r.hidden),
-  count: count.textContent,
-  noMatchHidden: noMatch.hidden,
-  status: status.textContent,
-};
-
 process.stdout.write(JSON.stringify({
-  filtersRevealed, afterClick, afterArrow, afterAction, afterLate, afterHigh,
-  afterZero,
+  filtersHidden: filters.hidden,
+  prevented: linkEv.defaultPrevented,
+  current: [r1, r2, r3].map((r) => r.getAttribute("aria-current")),
+  blocksHidden: [b1.hidden, b2.hidden, b3.hidden],
+  rowsHidden: [r1.hidden, r2.hidden, r3.hidden],
+  count: count.textContent,
+  search: h.locationObj.search,
+  triggers: h.htmxCalls.length,
 }));
 """)
-        self.assertTrue(result["filtersRevealed"])
-        self.assertEqual(result["afterClick"], {
-            "prevented": True,
-            "r1Current": None,
-            "r2Current": "true",
-            "blocksHidden": [True, False, True],
-            "focused": True,
-            "search": "?selected=NV-2",
-        })
-        self.assertEqual(result["afterArrow"], {
-            "r3Current": "true",
-            "blocksHidden": [True, True, False],
-            "focused": True,
-            "search": "?selected=NV-3",
-        })
-        self.assertEqual(result["afterAction"], {
-            "shown": [True, False, False],
-            "count": "1",
-            "noMatchHidden": True,
-            "status": "Rows shown: 1",
-            "r1Current": "true",
-            "search": "?selected=NV-1",
-        })
-        self.assertEqual(result["afterLate"], {
-            "shown": [False, True, False],
-            "count": "1",
-            "r2Current": "true",
-        })
-        self.assertEqual(result["afterHigh"], {
-            "shown": [True, False, False],
-            "count": "1",
-        })
-        self.assertEqual(result["afterZero"], {
-            "shown": [False, False, False],
-            "count": "0",
-            "noMatchHidden": False,
-            "status": "No row matches.",
+        self.assertEqual(result, {
+            "filtersHidden": True,
+            "prevented": False,
+            "current": ["true", None, None],
+            "blocksHidden": [False, True, True],
+            "rowsHidden": [False, False, False],
+            "count": "3",
+            "search": "",
+            "triggers": 0,
         })
 
     def test_dialog_and_sortable_table_morph_and_reconnect(self) -> None:
@@ -2091,16 +2089,44 @@ class TemplateWiringTests(PlanningCase):
     def test_planning_page_wiring(self) -> None:
         self.planned_item("NV-10", quantity=10)
         root = self.check_page(PLAN)
-        grid = root.find("div", cls="planning-grid")
+        layout = root.find("div", cls="item-layout")
+        self.assertIsNotNone(layout)
+        self.assertIn("split-list", self.controllers(layout))
+        self.assertEqual(layout.get("data-split-list-mode-value"), "htmx")
+        self.assertEqual(layout.get("data-cookie"), "planning-list-view")
+        grid = root.find("table", cls="main-table")
         self.assertIsNotNone(grid)
-        self.assertIn("split-list", self.controllers(grid))
-        self.assertEqual(grid.get("data-split-list-mode-value"), "local")
-        self.assertIn(
-            "sortable-table",
-            self.controllers(root.find("table", id="planning-list")))
-        rows = root.find_all("tr", attrs={"data-article": True})
+        self.assertNotIn("sortable-table", self.controllers(grid))
+        self.assertEqual(root.find_all("div", cls="planning-grid"), [])
+        rows = root.find_all("tr", attrs={"data-item": True})
         self.assertTrue(rows)
-        self.assertTrue(any(r.get("data-action") == "1" for r in rows))
+        for row in rows:
+            self.assertTrue(row.get("hx-get"))
+            self.assertEqual(row.get("hx-trigger"), "item-select")
+        self.assertEqual(root.find_all("tr", attrs={"data-article": True}),
+                         [])
+
+    def test_every_main_list_wires_the_split_list(self) -> None:
+        self.planned_item("NV-10", quantity=10)
+        make_task(self.kl, "NV-10")
+        make_vessel(self.kl, article="NV-10", unit="mg", amount="5")
+        for path in ("/lab/inventory/end-products/",
+                     "/lab/inventory/end-products/bulk/",
+                     "/lab/inventory/deliveries/",
+                     "/lab/inventory/intermediates/",
+                     "/lab/inventory/chemicals/",
+                     "/lab/inventory/batches/",
+                     "/lab/inventory/vessels/",
+                     "/lab/tasks/", "/lab/registry/", PLAN):
+            with self.subTest(path=path):
+                root = self.check_page(path)
+                layout = root.find("div", cls="item-layout")
+                self.assertIsNotNone(layout)
+                self.assertIn("split-list", self.controllers(layout))
+                self.assertEqual(
+                    layout.get("data-split-list-mode-value"), "htmx")
+                self.assertTrue(layout.get("data-cookie"))
+                self.assertIsNotNone(root.find("table", cls="main-table"))
 
     def test_batch_narrow_wiring_on_item_and_delivery_forms(self) -> None:
         make_substance("cinnamic-acid", "Cinnamic acid")

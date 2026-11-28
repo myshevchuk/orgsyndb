@@ -39,6 +39,19 @@ BULK_COOKIE = "bulk-list-view"
 NOTE_COOKIE = "delivery-list-view"
 INTERMEDIATE_COOKIE = "intermediate-list-view"
 CHEMICAL_COOKIE = "chemical-list-view"
+BATCH_COOKIE = "batch-list-view"
+VESSEL_COOKIE = "vessel-list-view"
+
+
+def batch_source_text(batch: Batch) -> str:
+    """Return the visible source text of BATCH as ``batch_source.html``
+    shows it."""
+    text = str(batch.get_source_display())
+    if batch.source == "made" and batch.task_step_id is not None:
+        return f"{text} · {batch.task_step.task.number}"
+    if batch.supplier:
+        return f"{text} · {batch.supplier}"
+    return text
 
 
 def tabs(current: str) -> list[dict[str, Any]]:

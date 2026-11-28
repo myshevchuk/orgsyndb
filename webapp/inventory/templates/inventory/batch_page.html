@@ -33,7 +33,7 @@
 <div class="lab-note">{{ batch.note|linebreaks }}</div>
 {% endif %}<h2>{% translate "Vessels" %}</h2>
 {% if vessels %}<div class="table-scroll">
-<table class="inventory-table">
+<table class="aux-table">
 <thead>
 <tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Amount" %}</th></tr>
 </thead>
@@ -50,7 +50,7 @@
 {% else %}<p>{% translate "No vessel." %}</p>
 {% endif %}{% if fillings %}<h2>{% translate "Fillings" %}</h2>
 <div class="table-scroll">
-<table class="inventory-table">
+<table class="aux-table">
 <thead>
 <tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Vessel" %}</th></tr>
 </thead>
@@ -66,7 +66,7 @@
 </div>
 {% endif %}<h2>{% translate "Containers" %}</h2>
 {% if stocks %}<div class="table-scroll">
-<table class="inventory-table">
+<table class="aux-table">
 <thead>
 <tr><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
 </thead>
@@ -81,7 +81,7 @@
 {% else %}<p>{% translate "No containers." %}</p>
 {% endif %}{% if lines %}<h2>{% translate "Deliveries" %}</h2>
 <div class="table-scroll">
-<table class="inventory-table">
+<table class="aux-table">
 <thead>
 <tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Count" %}</th></tr>
 </thead>

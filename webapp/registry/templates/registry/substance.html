@@ -17,7 +17,7 @@
 <aside class="substance-aside">
 {% translate "Compound" as compound_title %}<c-widget :title="compound_title" :note="substance.key" note_class="compound-key" flush>
 {% if substance.molfile %}<c-slot name="before_body"><figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure></c-slot>{% endif %}
-<table class="kv-table"><tbody>
+<table class="aux-table kv-table"><tbody>
 <tr><th scope="row">{% translate "Article no." %}</th><td{% if not substance.article_number %} class="muted"{% endif %}>{% if substance.article_number %}<strong>{{ substance.article_number }}</strong>{% else %}–{% endif %}</td></tr>
 <tr><th scope="row">{% translate "Formula" %}</th><td{% if not substance.formula %} class="muted"{% endif %}>{{ substance.formula|default:"–" }}</td></tr>
 <tr><th scope="row">{% translate "Molar mass" %}</th><td{% if substance.mw is None %} class="muted"{% endif %}>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</td></tr>
@@ -37,12 +37,12 @@
 <div class="substance-trio">
 {% translate "Containers" context "substance" as containers_title %}<c-widget :title="containers_title" count="{% if items %}{{ items|length }}{% endif %}" flush>
 {% if items %}<div class="table-scroll">
-<table class="widget-table">
+<table id="substance-containers" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Article / size" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
 <tbody>
 {% for item in items %}<tr>
-<td><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
-<td class="num">{% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</td>
+<td data-sort="{{ item|container_sort }}"><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
+<td class="num" data-sort="{{ item.quantity }}">{% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
@@ -51,12 +51,12 @@
 {% endif %}</c-widget>
 {% translate "Batches" context "substance" as batches_title %}<c-widget :title="batches_title" count="{% if batches %}{{ batches|length }}{% endif %}" flush>
 {% if batches %}<div class="table-scroll">
-<table class="widget-table">
+<table id="substance-batches" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Batch" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
 <tbody>
 {% for batch, stock in batches %}<tr>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
-<td class="num{% if not stock %} muted{% endif %}">{% if stock %}{% for amount, unit in stock %}{% if not forloop.first %}, {% endif %}{{ amount|decimal }} {{ unit }}{% endfor %}{% else %}–{% endif %}</td>
+<td class="num{% if not stock %} muted{% endif %}"{% if stock %} data-sort="{{ stock|amounts_sort }}"{% endif %}>{% if stock %}{% for amount, unit in stock %}{% if not forloop.first %}, {% endif %}{{ amount|decimal }} {{ unit }}{% endfor %}{% else %}–{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
@@ -65,7 +65,7 @@
 {% endif %}</c-widget>
 {% translate "Tasks" context "substance" as tasks_title %}<c-widget :title="tasks_title" count="{% if tasks %}{{ tasks|length }}{% endif %}" flush>
 {% if tasks %}<div class="table-scroll">
-<table class="widget-table">
+<table id="substance-tasks" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Task" context "substance" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
 <tbody>
 {% for task in tasks %}<tr>
@@ -80,13 +80,13 @@
 </div>
 {% if made_by %}{% translate "Made by" context "substance" as made_by_title %}<c-widget :title="made_by_title" count="{{ made_by|length }}" flush>
 <div class="table-scroll">
-<table class="widget-table">
+<table id="substance-made-by" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Entry" %}</th><th scope="col" class="num">{% translate "Yield" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
 <tbody>
 {% for made in made_by %}<tr>
 <td><a href="/procedures/{{ made.procedure.key|lower }}/"><strong>{{ made.procedure.key }}</strong> {{ made.procedure.shown_title }}</a></td>
-<td class="{% if made.entry %}nowrap{% else %}muted{% endif %}">{% if made.entry %}{% blocktranslate with entry=made.entry %}entry {{ entry }}{% endblocktranslate %}{% else %}–{% endif %}</td>
-<td class="num{% if made.yield_percent is None %} muted{% endif %}">{% if made.yield_percent is not None %}{{ made.yield_percent|decimal }} %{% else %}–{% endif %}</td>
+<td class="{% if made.entry %}nowrap{% else %}muted{% endif %}"{% if made.entry %} data-sort="{{ made.entry }}"{% endif %}>{% if made.entry %}{% blocktranslate with entry=made.entry %}entry {{ entry }}{% endblocktranslate %}{% else %}–{% endif %}</td>
+<td class="num{% if made.yield_percent is None %} muted{% endif %}"{% if made.yield_percent is not None %} data-sort="{{ made.yield_percent|base_sort }}"{% endif %}>{% if made.yield_percent is not None %}{{ made.yield_percent|decimal }} %{% else %}–{% endif %}</td>
 <td{% if not made.procedure.status %} class="muted"{% endif %}>{% if made.procedure.status %}<span class="badge badge--{{ made.procedure.status }}">{% site_string "status_"|add:made.procedure.status %}</span>{% else %}–{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
@@ -95,7 +95,7 @@
 </c-widget>
 {% endif %}{% if used_in %}{% translate "Used in" context "substance" as used_in_title %}<c-widget :title="used_in_title" count="{{ used_in|length }}" flush>
 <div class="table-scroll">
-<table class="widget-table">
+<table id="substance-used-in" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
 <tbody>
 {% for procedure in used_in %}<tr>
@@ -108,7 +108,7 @@
 </c-widget>
 {% endif %}{% if sequences %}{% translate "Sequences" context "substance" as sequences_title %}<c-widget :title="sequences_title" count="{{ sequences|length }}" flush>
 <div class="table-scroll">
-<table class="widget-table">
+<table id="substance-sequences" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr><th scope="col">{% translate "Sequence" %}</th></tr></thead>
 <tbody>
 {% for sequence in sequences %}<tr>

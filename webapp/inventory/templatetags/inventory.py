@@ -1,5 +1,6 @@
 """Template filters of the inventory's pages."""
 
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 
@@ -7,6 +8,8 @@ from django import template
 from django.utils.formats import number_format
 
 from inventory.models import Batch, Item, Level, Vessel, plain, shown
+from orgsyndb_web.lists import (amount_data_sort, format_decimal_key,
+                                pairs_data_sort)
 
 register = template.Library()
 
@@ -41,8 +44,25 @@ def level_label(value: str | None) -> str:
     return str(Level(value).label) if value else ""
 
 
-
 @register.filter
 def new_on(item: Item, today: date) -> bool:
     """Whether ITEM entered stock in the calendar year of TODAY."""
     return item.is_new(today)
+
+
+@register.filter
+def base_sort(amount: Decimal | None) -> str:
+    """Return AMOUNT (in mg or µmol) as a plain decimal sort key."""
+    return "" if amount is None else format_decimal_key(Decimal(amount))
+
+
+@register.filter
+def amounts_sort(pairs: Sequence[tuple[Decimal, str]]) -> str:
+    """Return the client ``data-sort`` key for ``(amount, unit)`` PAIRS."""
+    return pairs_data_sort(pairs)
+
+
+@register.filter
+def container_sort(item: Item) -> str:
+    """Return the client ``data-sort`` key for ITEM's container size."""
+    return amount_data_sort(item.size, item.unit)
