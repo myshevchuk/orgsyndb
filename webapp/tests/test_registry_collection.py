@@ -165,7 +165,7 @@ class FilterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         main = page(response).find("main")
         return sorted(a.get("href").rstrip("/").rsplit("/", 1)[1]
-                      for a in main.find("table").find_all("a"))
+                      for a in main.find(id="item-rows").find_all("a"))
 
     def test_a_group_takes_the_groups_below(self) -> None:
         self.assertEqual(self.listed("group=synthesised"), ["a", "b"])

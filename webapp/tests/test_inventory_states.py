@@ -225,8 +225,7 @@ class ListTests(InventoryCase):
             href = urlsplit(link.get("href"))
             self.assertEqual(href.path, LIST)
             self.assertEqual(parse_qs(href.query),
-                             {"stock": [level], "sort": ["category"],
-                              "selected": marked})
+                             {"stock": [level], "selected": marked})
             label = LEVELS[level]
             self.assertEqual(link.find("strong").text(),
                              label[0].upper() + label[1:])
