@@ -21,10 +21,10 @@ from .main_lists_support import must_pane, projected_marks, strong_columns
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
-              "Bulk verfügbar"]
+              "Bulk"]
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
               "Mean per year", "Delivered", "Coverage", "Compartment",
-              "Box", "Bulk available"]
+              "Box", "Bulk"]
 BATCHES_DE = ["Charge", "Name", "Artikelnr.", "Herkunft", "Laborjournal",
               "Datum", "Ausbeute", "Bestand"]
 BATCHES_EN = ["Batch", "Name", "Article no.", "Source", "Lab notebook",

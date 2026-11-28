@@ -23,7 +23,7 @@ SORTS = ("number", "name", "category", "container", "stock", "mean_year",
          "this_year", "coverage", "compartment", "box", "bulk")
 COLUMNS = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
            "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
-           "Bulk verfügbar"]
+           "Bulk"]
 KEYS = ["number", "name", "category", "container", "stock", "mean_year",
         "this_year", "coverage", "compartment", "box", "bulk"]
 SORTED_COLUMNS = dict(zip(KEYS, COLUMNS))
@@ -131,7 +131,7 @@ class ColumnTests(TableCase):
         self.assertEqual(header, [
             "Article no.", "Name", "Category", "Container", "Stock",
             "Mean per year", "Delivered", "Coverage", "Compartment", "Box",
-            "Bulk available"])
+            "Bulk"])
         units = [th.find("small").text()
                  for th in self.headers(root).values() if th.find("small")]
         self.assertEqual(units, ["containers", "containers / year",
@@ -282,7 +282,7 @@ class SortTests(TableCase):
                 ("?sort=stock&dir=desc",
                  "Bestand absteigend, Artikelnr., Gebinde aufsteigend"),
                 ("?sort=bulk",
-                 "Bulk verfügbar, Artikelnr., Gebinde aufsteigend")):
+                 "Bulk, Artikelnr., Gebinde aufsteigend")):
             with self.subTest(query=query):
                 self.assertEqual(self.summary(self.listing(query)),
                                  f"1 von 1 Artikel · {order}")
@@ -438,7 +438,7 @@ class SortTests(TableCase):
         self.assertEqual(self.header_link(root, "Name"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["name"]})
-        self.assertEqual(self.header_link(root, "Bulk verfügbar"), {
+        self.assertEqual(self.header_link(root, "Bulk"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["bulk"]})
 
@@ -448,7 +448,7 @@ class SortTests(TableCase):
         second = self.item("K-2", category="Grün")
         root = self.listing(f"?category={quote('Grün')}&q=k"
                             f"&sort=name&dir=desc&selected={second.pk}")
-        for column in ("Name", "Bulk verfügbar"):
+        for column in ("Name", "Bulk"):
             with self.subTest(column=column):
                 link = self.header_link(root, column)
                 self.assertEqual(link.get("selected"), [str(second.pk)])

@@ -96,7 +96,7 @@ class ItemTests(InventoryCase):
         header, rows = table(page(self.client.get(LIST)))
         cell = next(r for r in rows
                     if r["Name"].text() == "Neuverbindung 9")[
-                        "Bulk verfügbar"]
+                        "Bulk"]
         self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
         self.assertNotIn("90", cell.text())
 
@@ -389,7 +389,7 @@ class BulkOfAnItemTests(InventoryCase):
         header, rows = table(page(self.client.get(LIST)))
         return {f"{row[header[0]].text()} "
                 f"{row['Gebinde'].text().replace(' ', '')}":
-                row["Bulk verfügbar"]
+                row["Bulk"]
                 for row in rows}
 
     def details(self, item: Any) -> str:
@@ -426,7 +426,7 @@ class BulkOfAnItemTests(InventoryCase):
         self.item("CH-0012", size="10", unit="umol")
         self.vessel("CH-0012", "mg", "50")
         header, rows = table(page(self.client.get(LIST)))
-        text = rows[0]["Bulk available"].text()
+        text = rows[0]["Bulk"].text()
         self.assertTrue(has_amount(text, "50", "mg"), text)
         self.assertNotIn("→", text)
         self.assertNotIn("container", text)
