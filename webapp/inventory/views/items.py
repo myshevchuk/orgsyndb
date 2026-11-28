@@ -36,7 +36,8 @@ from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     htmx_detail_or_redirect, in_use, item_form,
                                     item_url, layers, list_view, open_vessels,
                                     pick_selected, render_form, saved, tabs)
-from orgsyndb_web.lists import clean_choice, htmx_list_push_url, sort_rows
+from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
+                                htmx_list_push_url, sort_value)
 from planning import plan
 
 
@@ -109,11 +110,11 @@ class ColumnSpec:
 
 COLUMN_MODEL: tuple[ColumnSpec, ...] = (
     ColumnSpec("number", gettext_lazy("Article no."), "", False,
-               lambda row: row.item.article_number, "base"),
+               lambda row: sort_value(row.item.article_number), "base"),
     ColumnSpec("name", gettext_lazy("Name"), "", False,
-               lambda row: row.item.name.casefold(), "base"),
+               lambda row: sort_value(row.item.name), "base"),
     ColumnSpec("category", gettext_lazy("Category"), "", False,
-               lambda row: folded(row.item.category), "base"),
+               lambda row: sort_value(row.item.category), "base"),
     ColumnSpec("container", gettext_lazy("Container"), "", True,
                lambda row: row.item.container_order(), "base"),
     ColumnSpec("stock", gettext_lazy("Stock"), gettext_lazy("containers"),
@@ -131,14 +132,17 @@ COLUMN_MODEL: tuple[ColumnSpec, ...] = (
                gettext_lazy("quarters"), True,
                lambda row: row.figures.coverage, "table"),
     ColumnSpec("compartment", gettext_lazy("Compartment"), "", False,
-               lambda row: located(row.item.compartment), "table"),
+               lambda row: sort_value(row.item.compartment), "table"),
     ColumnSpec("box", gettext_lazy("Box"), "", False,
-               lambda row: located(row.item.box), "table"),
+               lambda row: sort_value(row.item.box), "table"),
     ColumnSpec("bulk", gettext_lazy("Bulk available"), "", False,
                lambda row: row.bulk.containers if row.bulk.vessels else None,
                "table"),
     ColumnSpec("note", pgettext_lazy("inventory", "Note"), "", False,
-               lambda row: folded(row.item.note), "table", shown=False),
+               lambda row: sort_value(row.item.note), "table", shown=False),
+)
+SORT_COLUMNS: tuple[SortColumn, ...] = tuple(
+    SortColumn(spec.key, spec.label, spec.value) for spec in COLUMN_MODEL
 )
 SORTS = tuple(spec.key for spec in COLUMN_MODEL)
 DEFAULT_SORT = "category"
@@ -153,9 +157,8 @@ class ItemFilters:
     unknown value replaced by its default: Q, the searched text;
     CATEGORY, CONTAINER as ``container_code`` gives it, COMPARTMENT and
     BOX, admitting the items with that value; STOCK, any level or
-    empty, admitting that level alone; SORT, one of ``SORTS``,
-    ``category`` by default; and DESCENDING, whether ``dir=desc``
-    reverses the order."""
+    empty, admitting that level alone; and ORDER, the resolved sort
+    order."""
 
     q: str = ""
     category: str = ""
@@ -163,8 +166,18 @@ class ItemFilters:
     container: str = ""
     compartment: str = ""
     box: str = ""
-    sort: str = DEFAULT_SORT
-    descending: bool = False
+    order: Order = Order(SORT_COLUMNS, DEFAULT_SORT, False,
+                         DEFAULT_SORT, False)
+
+    @property
+    def sort(self) -> str:
+        """The active sort column key."""
+        return self.order.key
+
+    @property
+    def descending(self) -> bool:
+        """Whether the active sort order is descending."""
+        return self.order.descending
 
     @classmethod
     def from_query(cls, query: Any) -> "ItemFilters":
@@ -173,8 +186,8 @@ class ItemFilters:
         given["stock"] = clean_choice(given["stock"], Level.values)
         return cls(
             **given,
-            sort=clean_choice(query.get("sort", ""), SORTS, DEFAULT_SORT),
-            descending=query.get("dir") == "desc")
+            order=Order.from_query(query, SORT_COLUMNS, DEFAULT_SORT),
+        )
 
     @property
     def active(self) -> bool:
@@ -185,6 +198,11 @@ class ItemFilters:
     def more(self) -> int:
         """The number of the filters under "More filters" in force."""
         return sum(1 for name in MORE_FILTERS if getattr(self, name))
+
+    def filter_pairs(self) -> list[tuple[str, str]]:
+        """Return the active filter query pairs in canonical order."""
+        return [(name, getattr(self, name)) for name in FILTERS
+                if getattr(self, name)]
 
     def admits(self, row: Row) -> bool:
         """Whether ROW passes every filter."""
@@ -198,27 +216,21 @@ class ItemFilters:
                 and (not self.stock or row.figures.level == self.stock)
                 and (not self.q or self.q.casefold() in row.searched()))
 
-    def link(self, sort: str, descending: bool = False,
-             filtered: bool = True, selected: str = "") -> str:
-        """The list's address in the order of SORT, reversed when
-        DESCENDING, with the filters in force when FILTERED, and
-        naming the item SELECTED, an id, unless that is empty."""
-        pairs = [(name, getattr(self, name)) for name in FILTERS
-                 if filtered and getattr(self, name)]
-        pairs.append(("sort", sort))
-        if descending:
-            pairs.append(("dir", "desc"))
+    def canonical_query(self, filtered: bool = True,
+                        selected: str = "") -> str:
+        """Return the canonical query string with active filters when
+        FILTERED, non-default order, and SELECTED when given."""
+        pairs = self.filter_pairs() if filtered else []
+        pairs.extend(self.order.pairs())
         if selected:
             pairs.append(("selected", selected))
-        return "?" + urlencode(pairs)
+        return f"?{urlencode(pairs)}" if pairs else ""
 
     def ordered(self, rows: list[Row]) -> list[Row]:
         """ROWS, given in the default order, in the order in force: by
         the sort key's value, reversed when descending, rows without one
         after the others; ties keep their order."""
-        value = next(spec.value for spec in COLUMN_MODEL
-                     if spec.key == self.sort)
-        return sort_rows(rows, value, descending=self.descending)
+        return self.order.ordered(rows)
 
 
 @dataclass(frozen=True)
@@ -270,13 +282,13 @@ def columns(filters: ItemFilters, year: int, selected: str = ""
     order, each header linking to the list sorted by it, reversed when
     it is in force and not reversed, and naming the item SELECTED, an
     id, unless that is empty."""
+    filter_pairs = filters.filter_pairs()
     return [Column(
         spec=spec, label=str(spec.label),
         unit=str(spec.unit) % {"year": year},
-        href=filters.link(spec.key, spec.key == filters.sort
-                          and not filters.descending, selected=selected),
-        aria_sort=("descending" if filters.descending else "ascending")
-        if spec.key == filters.sort else "") for spec in COLUMN_MODEL]
+        href=LIST + filters.order.link(spec.key, filter_pairs, selected),
+        aria_sort=filters.order.aria_sort(spec.key),
+    ) for spec in COLUMN_MODEL]
 
 
 def order_text(filters: ItemFilters) -> str:
@@ -366,8 +378,8 @@ def stock_menu(rows: list[Row], filters: ItemFilters, selected: str = ""
               ) -> StockEntry:
         return StockEntry(
             level=level, label=label, meaning=meaning, count=count,
-            href=LIST + replace(filters, stock=level).link(
-                filters.sort, filters.descending, selected=selected),
+            href=LIST + replace(filters, stock=level).canonical_query(
+                selected=selected),
             current=filters.stock == level)
 
     return [entry("", _("All stock statuses"), "", counts.total()),
@@ -424,8 +436,9 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "table_columns": [column for column in shown_columns
                           if column.table_only],
         "order": order_text(filters),
-        "reset": filters.link(filters.sort, filters.descending,
-                              filtered=False, selected=selected),
+        "sort_order": filters.order,
+        "reset": LIST + filters.canonical_query(filtered=False,
+                                                selected=selected),
         "categories": sorted({item.category for item in items
                               if item.category}),
         "containers": list(containers.items()),
@@ -442,8 +455,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
     })
     return htmx_list_push_url(
         request, response,
-        LIST + filters.link(filters.sort, filters.descending,
-                            selected=selected))
+        LIST + filters.canonical_query(selected=selected))
 
 
 @vary_on_headers("HX-Request", "HX-Current-URL")

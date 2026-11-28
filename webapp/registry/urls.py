@@ -9,6 +9,8 @@ urlpatterns = [
     path("snapshot.json", views.snapshot_json, name="registry_snapshot"),
     path("substances/new/", views.substance_new, name="substance_new"),
     path("substances/<str:key>/", views.substance_page, name="substance"),
+    path("substances/<str:key>/detail/", views.substance_detail,
+         name="substance_detail"),
     path("substances/<str:key>/edit/", views.substance_edit,
          name="substance_edit"),
     path("substances/<str:key>/structure.svg", views.structure_image,

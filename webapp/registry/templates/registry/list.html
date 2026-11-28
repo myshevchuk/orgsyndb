@@ -1,10 +1,11 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{% translate "Substances" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-{% translate "Substances" as heading %}<c-list-heading :title="heading" count="{{ substances|length }}" count_id="substance-count">
+{% translate "Substances" as heading %}<c-list-heading :title="heading" count="{{ substances|length }}" count_id="substance-count" count_refresh>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
-{% translate "Search substances" as search_label %}{% translate "Inventory group" as group_label %}{% translate "Chemical class" as class_label %}<c-filter-bar id="filters" action="/lab/registry/" :toolbar="False" hx-get="/lab/registry/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#substance-rows" hx-select="#substance-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph">
+{% translate "Search substances" as search_label %}{% translate "Inventory group" as group_label %}{% translate "Chemical class" as class_label %}<c-filter-bar id="filters" action="/lab/registry/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/registry/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
 <c-filter-search id="filter-q" :value="q" :label="search_label" :inline="False" />
 <c-filter-select name="group" :label="group_label" :inline="False">
 <option value=""{% if not group %} selected{% endif %}>{% translate "All" context "registry" %}</option>
@@ -16,14 +17,15 @@
 {% if class_unknown %}<option value="{{ chemical_class }}" selected>{{ chemical_class }}</option>
 {% endif %}{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
 {% endfor %}</c-filter-select>
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<div class="table-scroll">
-<table class="inventory-table registry-table">
-<thead>
-<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Short name" %}</th><th scope="col">{% translate "Inventory group" %}</th><th scope="col">{% translate "Chemical classes" %}</th><th scope="col">{% translate "Formula" %}</th><th scope="col">{% translate "Molar mass" %}</th><th scope="col">{% translate "Article no." %}</th></tr>
+<c-split-layout :view="view" cookie="substance-list-view">
+<table class="main-table registry-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#substance-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="substance-rows">
-{% for found in substances %}<tr id="substance-row-{{ found.pk }}">
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for found in substances %}<tr id="substance-row-{{ found.pk }}" data-item="{{ found.key }}" hx-get="/lab/registry/substances/{{ found.key }}/detail/" hx-trigger="item-select"{% if found == detail_substance %} aria-current="true"{% endif %}>
 <td>{% substance found %}</td>
 <td>{{ found.key }}</td>
 <td>{{ found.short_name }}</td>
@@ -35,5 +37,71 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div>
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_substance %}{% with substance=detail_substance %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ substance.key }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/registry/substances/{{ substance.key }}/">{{ substance.shown_name }}</a></h2>
+</header>
+{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
+{% endif %}<dl class="detail-location">
+<dt>{% translate "Key" %}</dt><dd>{{ substance.key }}</dd>
+<dt>{% translate "Short name" %}</dt><dd>{{ substance.short_name|default:"–" }}</dd>
+<dt>{% translate "Inventory group" %}</dt><dd>{% if substance.group %}{{ substance.group.shown_label }}{% else %}–{% endif %}</dd>
+<dt>{% translate "Chemical classes" %}</dt><dd>{% for term in detail_classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>
+<dt>{% translate "Formula" %}</dt><dd>{{ substance.formula|default:"–" }}</dd>
+<dt>{% translate "Molar mass" %}</dt><dd>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</dd>
+<dt>{% translate "CAS number" %}</dt><dd>{{ substance.cas|default:"–" }}</dd>
+<dt>{% translate "Article no." %}</dt><dd>{{ substance.article_number|default:"–" }}</dd>
+</dl>
+<p class="detail-links"><a href="/lab/registry/substances/{{ substance.key }}/">{% translate "Open substance page" %}</a></p>
+{% if user.is_authenticated %}<p class="lab-actions"><a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a></p>
+{% endif %}<h3>{% translate "Containers" context "substance" %}</h3>
+{% if detail_items %}<table id="substance-detail-items" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "Container" %}</th>
+<th scope="col" class="number">{% translate "Stock" %}</th>
+</tr></thead>
+<tbody>
+{% for item in detail_items %}<tr>
+<td data-sort="{{ item|container_sort }}"><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
+<td class="number" data-sort="{{ item.quantity }}">{{ item.quantity }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}<h3>{% translate "Batches" context "substance" %}</h3>
+{% if detail_batches %}<table id="substance-detail-batches" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "Batch" %}</th>
+<th scope="col">{% translate "Date" %}</th>
+<th scope="col" class="number">{% translate "Stock" %}</th>
+</tr></thead>
+<tbody>
+{% for batch, stock in detail_batches %}<tr>
+<td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
+<td{% if batch.date %} data-sort="{{ batch.date|date:'Y-m-d' }}"{% endif %}>{{ batch.date|default_if_none:"" }}</td>
+<td class="number"{% if stock %} data-sort="{{ stock|amounts_sort }}"{% endif %}>{% for amount, unit in stock %}{{ amount|decimal }} {{ unit }}{% if not forloop.last %} · {% endif %}{% empty %}–{% endfor %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}<h3>{% translate "Tasks" %}</h3>
+{% if detail_tasks %}<table id="substance-detail-tasks" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "No." %}</th>
+<th scope="col">{% translate "State" %}</th>
+</tr></thead>
+<tbody>
+{% for task in detail_tasks %}<tr>
+<td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
+<td>{{ task.state_label }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+<p class="lab-empty">{% translate "No substance is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}

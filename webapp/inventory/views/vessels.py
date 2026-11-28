@@ -10,8 +10,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -20,9 +21,49 @@ from inventory.forms import (NewVesselForm, TransferForm,
                              WithdrawalForm)
 from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
-from inventory.views.common import (VESSELS, batch_url, form_page, item_form,
-                                    locations, saved, tabs, vessel_url)
-from orgsyndb_web.lists import clean_choice, htmx_list_push_url
+from inventory.views.common import (VESSEL_COOKIE, VESSELS, batch_source_text,
+                                    batch_url, form_page,
+                                    htmx_detail_or_redirect, item_form,
+                                    list_view, locations, pick_selected, saved,
+                                    tabs, vessel_url)
+from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
+                                clean_choice, htmx_list_push_url, sort_value)
+
+
+def _vessel_amount_sort(vessel: Vessel) -> Any:
+    base_unit = "mg" if vessel.unit in ("mg", "g", "kg", "ug") else "umol"
+    return amount_sort_key(vessel.amount, base_unit)
+
+
+def _vessel_opened_sort(vessel: Vessel) -> Any:
+    if vessel.batch.source != "bought":
+        return None
+    return sort_value(vessel.opened_on if vessel.opened_on else _("sealed"))
+
+
+VESSEL_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("vessel", gettext_lazy("Vessel"),
+               lambda v: sort_value(f"#{v.pk}")),
+    SortColumn("name", gettext_lazy("Name"),
+               lambda v: sort_value(v.batch.substance.shown_name)),
+    SortColumn("article", gettext_lazy("Article no."),
+               lambda v: sort_value(v.article_number)),
+    SortColumn("kind", gettext_lazy("Kind"),
+               lambda v: sort_value(v.kind_label)),
+    SortColumn("batch", gettext_lazy("Batch"),
+               lambda v: sort_value(str(v.batch))),
+    SortColumn("source", gettext_lazy("Source"),
+               lambda v: sort_value(batch_source_text(v.batch))),
+    SortColumn("amount", gettext_lazy("Amount"), _vessel_amount_sort),
+    SortColumn("location", gettext_lazy("Location"),
+               lambda v: sort_value(v.location)),
+    SortColumn("date", gettext_lazy("Date"),
+               lambda v: sort_value(v.batch.date)),
+    SortColumn("opened", gettext_lazy("Opened"), _vessel_opened_sort),
+    SortColumn("note", pgettext_lazy("inventory", "Note"),
+               lambda v: sort_value(v.note)),
+)
+VESSEL_CLASSES = {"amount": "number"}
 
 
 @dataclass(frozen=True)
@@ -37,15 +78,18 @@ class VesselLedgerRow:
     reversible: bool
 
 
+@vary_on_cookie
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def vessel_list(request: HttpRequest) -> HttpResponse:
     """List the open vessels of every substance, and the used-up ones
-    too with ``empty=1``, by the substance's name regardless of case,
-    then by their batch's date, oldest first and vessels without one
-    last, then by ID. ``kind`` names one of ``VesselKind`` and lists the
-    vessels of that kind; another value lists every kind."""
+    too with ``empty=1``, by the substance's name regardless of case by
+    default, then by their batch's date, oldest first and vessels
+    without one last, then by ID. ``kind`` names one of ``VesselKind``
+    and lists the vessels of that kind; another value lists every
+    kind."""
     empty = request.GET.get("empty") == "1"
     kind = clean_choice(request.GET.get("kind", ""), VesselKind.values)
+    order = Order.from_query(request.GET, VESSEL_COLUMNS, "name")
     vessels = Vessel.objects.with_substance().select_related(
         "batch__task_step__task")
     if not empty:
@@ -56,21 +100,47 @@ def vessel_list(request: HttpRequest) -> HttpResponse:
                        vessel.batch.substance.shown_name.casefold(),
                        vessel.batch.date is None,
                        vessel.batch.date or date.min, vessel.pk))
+    found = order.ordered(found)
+    chosen, selected = pick_selected(
+        found, request.GET.get("selected", ""), lambda vessel: vessel.pk)
+    filter_pairs: list[tuple[str, str]] = []
+    if kind:
+        filter_pairs.append(("kind", kind))
+    if empty:
+        filter_pairs.append(("empty", "1"))
     response = render(request, "inventory/vessel_list.html", {
         "vessels": found,
+        "detail_vessel": chosen,
+        "ledger": vessel_ledger(chosen, 5) if chosen else [],
+        "selected": selected,
+        "order": order,
+        "headers": order.headers(VESSELS, filter_pairs, selected,
+                                 VESSEL_CLASSES),
+        "view": list_view(request, VESSEL_COOKIE),
         "empty": empty,
         "kind": kind,
         "kinds": VesselKind.choices,
         "tabs": tabs(VESSELS),
     })
-    pairs: list[tuple[str, str]] = []
-    if kind:
-        pairs.append(("kind", kind))
-    if empty:
-        pairs.append(("empty", "1"))
+    pairs = [*filter_pairs, *order.pairs()]
+    if selected:
+        pairs.append(("selected", selected))
     return htmx_list_push_url(
         request, response,
         f"{VESSELS}?{urlencode(pairs)}" if pairs else VESSELS)
+
+
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def vessel_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer an htmx request with the details pane of vessel PK alone,
+    or redirect non-htmx requests to the vessel list with ``selected``
+    naming the vessel. Answer 404 for an unknown ID."""
+    vessel = get_object_or_404(
+        Vessel.objects.with_substance().select_related(
+            "batch__task_step__task"), pk=pk)
+    return htmx_detail_or_redirect(
+        request, VESSELS, vessel.pk, "inventory/vessel_list.html#detail",
+        lambda: {"detail_vessel": vessel, "ledger": vessel_ledger(vessel, 5)})
 
 
 def vessel_page(request: HttpRequest, pk: int) -> HttpResponse:

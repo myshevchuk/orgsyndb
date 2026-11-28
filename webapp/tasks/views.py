@@ -17,8 +17,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
-from django.views.decorators.http import require_POST
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from collection.models import EntrySubstance
 from inventory.bookings import write_off_flasks
@@ -26,13 +26,59 @@ from inventory.figures import stock_of
 from inventory.models import Batch, Vessel, VesselMovement, shown
 from journal.entries import entry_for
 from orgsyndb_web import lock
-from orgsyndb_web.lists import clean_choice, htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
+                                htmx_detail_or_redirect, htmx_list_push_url,
+                                list_view, pick_selected, sort_value)
 from planning.plan import Plan, TaskPriority
 from tasks.closing import amounts
 from tasks.forms import TaskEditForm, TaskForm
 from tasks.history import history_entries
 from tasks.models import Priority, State, Task, TaskStep
 from tasks.steps import finish
+
+TASKS_URL = "/lab/tasks/"
+TASK_COOKIE = "task-list-view"
+PRIORITY_ORDER = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
+STATE_ORDER = {
+    State.RUNNING: 0,
+    State.PLANNED: 1,
+    State.ENDED: 2,
+    State.CANCELLED: 3,
+}
+
+
+def _progress_sort(row: tuple[Task, TaskPriority, str]) -> Any:
+    done, total = row[0].step_counts
+    return done / total if total else None
+
+
+TASK_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("number", gettext_lazy("No."),
+               lambda row: sort_value(row[0].number)),
+    SortColumn("product", gettext_lazy("Product"),
+               lambda row: sort_value(row[0].substance.shown_name)),
+    SortColumn("priority", gettext_lazy("Priority"),
+               lambda row: PRIORITY_ORDER.get(row[1].priority, 3)),
+    SortColumn("assignee", gettext_lazy("Assignee"),
+               lambda row: sort_value(
+                   row[0].assignee.initials if row[0].assignee else "")),
+    SortColumn("started", gettext_lazy("Started"),
+               lambda row: sort_value(row[0].started)),
+    SortColumn("ended", pgettext_lazy("date", "Ended"),
+               lambda row: sort_value(row[0].ended)),
+    SortColumn("progress", gettext_lazy("Progress"), _progress_sort),
+    SortColumn("batch", gettext_lazy("Batch"),
+               lambda row: sort_value(
+                   row[2].split(", ")[0] if row[2] else "")),
+    SortColumn("report", gettext_lazy("Report"),
+               lambda row: sort_value(
+                   str(_("yes")) if row[0].report else str(_("no")))),
+    SortColumn("qc", gettext_lazy("QC list"),
+               lambda row: sort_value(
+                   str(_("yes")) if row[0].qc_list else str(_("no")))),
+    SortColumn("state", gettext_lazy("State"),
+               lambda row: STATE_ORDER.get(row[0].state, 4)),
+)
 
 STATE_FILTERS = [
     ("active", gettext_lazy("Active")),
@@ -80,9 +126,8 @@ class Filters:
             priority=clean_choice(priority, Priority.values),
             q=query.get("q", "").strip())
 
-    def query_string(self) -> str:
-        """Return the non-default active filter parameters encoded with a
-        leading ``?``, or empty when all filters are at their defaults."""
+    def filter_pairs(self) -> list[tuple[str, str]]:
+        """Return the non-default active filter pairs."""
         pairs: list[tuple[str, str]] = []
         if self.state != "active":
             pairs.append(("state", self.state))
@@ -92,6 +137,12 @@ class Filters:
             pairs.append(("priority", self.priority))
         if self.q:
             pairs.append(("q", self.q))
+        return pairs
+
+    def query_string(self) -> str:
+        """Return the non-default active filter parameters encoded with a
+        leading ``?``, or empty when all filters are at their defaults."""
+        pairs = self.filter_pairs()
         return "?" + urlencode(pairs) if pairs else ""
 
 
@@ -140,15 +191,36 @@ def selected(tasks: list[Task], filters: Filters,
         and (not words or words in searched_text(task))]
 
 
+def _task_detail_context(task: Task,
+                         shown_priority: TaskPriority | None = None
+                         ) -> dict[str, Any]:
+    """Return the details-pane context for TASK."""
+    if shown_priority is None:
+        shown_priority = Plan(timezone.localdate()).task_priority(task)
+    steps = [
+        shown_step(step)
+        for step in task.steps.select_related(
+            "entry__procedure").order_by("position")
+    ]
+    return {
+        "detail_task": task,
+        "detail_shown": shown_priority,
+        "detail_batches": list(task.product_batches().order_by("id")),
+        "detail_steps": steps,
+    }
+
+
+@vary_on_cookie
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def task_list(request: HttpRequest) -> HttpResponse:
-    """List the tasks the query's filters select, in the list's order,
-    each with its priority, computed or entered, and the counts of
-    planned, running and follow-up tasks among those the filters other
-    than the state select."""
+    """List the tasks the query's filters select, in the requested or
+    default order, each with its priority, computed or entered, and the
+    counts of planned, running and follow-up tasks among those the
+    filters other than the state select."""
     accounts = list(get_user_model().objects.order_by("initials"))
     filters = Filters.from_query(request.GET,
                                  {user.initials for user in accounts})
+    order = Order.from_query(request.GET, TASK_COLUMNS, "priority")
     tasks = list(Task.objects.select_related("assignee", "substance")
                  .prefetch_related("steps__batches"))
     plan = Plan(timezone.localdate())
@@ -158,9 +230,21 @@ def task_list(request: HttpRequest) -> HttpResponse:
                    key=lambda task: task.sort_key(
                        priorities[task.pk].priority,
                        priorities[task.pk].slack))
+    rows = order.ordered([(task, priorities[task.pk], product_numbers(task))
+                          for task in shown])
+    chosen, selected_key = pick_selected(
+        rows, request.GET.get("selected", ""), lambda row: row[0].number)
+    filter_pairs = filters.filter_pairs()
+    detail = (_task_detail_context(chosen[0], chosen[1]) if chosen
+              else {"detail_task": None, "detail_shown": None,
+                    "detail_batches": [], "detail_steps": []})
     response = render(request, "tasks/list.html", {
-        "tasks": [(task, priorities[task.pk], product_numbers(task))
-                  for task in shown],
+        "tasks": rows,
+        **detail,
+        "selected": selected_key,
+        "order": order,
+        "headers": order.headers(TASKS_URL, filter_pairs, selected_key),
+        "view": list_view(request, TASK_COOKIE),
         "filters": filters,
         "accounts": accounts,
         "state_filters": STATE_FILTERS,
@@ -171,8 +255,26 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "followup": sum(t.needs_follow_up for t in counted),
         },
     })
+    pairs = [*filter_pairs, *order.pairs()]
+    if selected_key:
+        pairs.append(("selected", selected_key))
     return htmx_list_push_url(
-        request, response, "/lab/tasks/" + filters.query_string())
+        request, response,
+        f"{TASKS_URL}?{urlencode(pairs)}" if pairs else TASKS_URL)
+
+
+@require_GET
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def task_detail(request: HttpRequest, number: str) -> HttpResponse:
+    """Answer a GET htmx request with the details pane of task NUMBER,
+    or redirect non-htmx GET requests to the task list with ``selected``
+    naming the task. Answer 404 for an unknown number and 405 for
+    methods other than GET."""
+    task = get_object_or_404(
+        Task.objects.select_related("assignee", "substance"), number=number)
+    return htmx_detail_or_redirect(
+        request, TASKS_URL, task.number, "tasks/list.html#detail",
+        lambda: _task_detail_context(task))
 
 
 @dataclass(frozen=True)

@@ -7,16 +7,20 @@ from urllib.parse import urlencode
 
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from inventory.figures import containers_from, molar_mass
 from inventory.models import Item, Source, Vessel
 from inventory.summaries import natural
-from inventory.views.common import (BULK, BULK_COOKIE, LIST, bulk_vessels,
+from inventory.views.common import (BULK, BULK_COOKIE, LIST,
+                                    batch_source_text, bulk_vessels,
                                     htmx_detail_or_redirect, layers,
                                     list_view, pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
-from orgsyndb_web.lists import clean_choice, htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
+                                clean_choice, htmx_list_push_url, sort_value)
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,38 @@ class BulkRow:
                           substance.key, substance.name,
                           substance.name_de, batch.number,
                           batch.supplier_batch]).casefold()
+
+
+def _article_sort(row: BulkRow) -> tuple[Any, ...]:
+    substance = row.vessel.batch.substance
+    number = substance.article.article_number
+    return (number is None, sort_value(number) or (),
+            sort_value(substance.shown_name))
+
+
+def _vessel_amount_sort(vessel: Vessel) -> Any:
+    base_unit = "mg" if vessel.unit in ("mg", "g", "kg", "ug") else "umol"
+    return amount_sort_key(vessel.amount, base_unit)
+
+
+BULK_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("article", gettext_lazy("Article"), _article_sort),
+    SortColumn("vessel", gettext_lazy("Vessel"),
+               lambda row: sort_value(f"#{row.vessel.pk}")),
+    SortColumn("batch", gettext_lazy("Batch"),
+               lambda row: sort_value(str(row.vessel.batch))),
+    SortColumn("source", gettext_lazy("Source"),
+               lambda row: sort_value(batch_source_text(row.vessel.batch))),
+    SortColumn("amount", gettext_lazy("Amount"),
+               lambda row: _vessel_amount_sort(row.vessel)),
+    SortColumn("location", gettext_lazy("Location"),
+               lambda row: sort_value(
+                   _("Flask") if row.vessel.flask else row.vessel.location)),
+    SortColumn("date", gettext_lazy("Date"),
+               lambda row: sort_value(row.vessel.batch.date)),
+    SortColumn("fills", pgettext_lazy("bulk", "Fills"), sortable=False),
+)
+BULK_CLASSES = {"amount": "number"}
 
 
 def bulk_rows(vessels: list[Vessel]) -> list[BulkRow]:
@@ -80,14 +116,15 @@ def bulk_order(vessel: Vessel) -> tuple[Any, ...]:
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def bulk_list(request: HttpRequest) -> HttpResponse:
     """List the open vessels of the substances that have an article, in
-    the bulk list's order, with the containers each would fill; ``q``,
-    ``location``, ``source`` and ``flask=1`` select among them. The
-    vessel ``selected`` names among those listed, else the first, is
+    the requested or default order, with the containers each would fill;
+    ``q``, ``location``, ``source`` and ``flask=1`` select among them.
+    The vessel ``selected`` names among those listed, else the first, is
     selected, in the view the cookie ``bulk-list-view`` remembers."""
     q = request.GET.get("q", "").strip()
     location = request.GET.get("location", "").strip()
     source = clean_choice(request.GET.get("source", ""), Source.values)
     flask = request.GET.get("flask") == "1"
+    order = Order.from_query(request.GET, BULK_COLUMNS, "article")
     vessels = list(bulk_vessels())
     locations = sorted({vessel.location for vessel in vessels
                         if vessel.location}, key=natural)
@@ -97,13 +134,25 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
             and (not location or row.vessel.location == location)
             and (not source or row.vessel.batch.source == source)
             and (not flask or row.vessel.flask)]
+    rows = order.ordered(rows)
     chosen, selected = pick_selected(
         rows, request.GET.get("selected", ""), lambda row: row.vessel.pk)
+    filter_pairs: list[tuple[str, str]] = []
+    if q:
+        filter_pairs.append(("q", q))
+    if location:
+        filter_pairs.append(("location", location))
+    if source:
+        filter_pairs.append(("source", source))
+    if flask:
+        filter_pairs.append(("flask", "1"))
     response = render(request, "inventory/bulk_list.html", {
         "rows": rows,
         "chosen": chosen,
         "ledger": vessel_ledger(chosen.vessel, 5) if chosen else [],
         "selected": selected,
+        "order": order,
+        "headers": order.headers(BULK, filter_pairs, selected, BULK_CLASSES),
         "view": list_view(request, BULK_COOKIE),
         "q": q,
         "location": location,
@@ -114,15 +163,7 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
         "tabs": tabs(LIST),
         "layers": layers(BULK),
     })
-    pairs: list[tuple[str, str]] = []
-    if q:
-        pairs.append(("q", q))
-    if location:
-        pairs.append(("location", location))
-    if source:
-        pairs.append(("source", source))
-    if flask:
-        pairs.append(("flask", "1"))
+    pairs = [*filter_pairs, *order.pairs()]
     if selected:
         pairs.append(("selected", selected))
     return htmx_list_push_url(

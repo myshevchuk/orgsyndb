@@ -44,3 +44,37 @@ msgstr "Demo: Alle Einträge sind erfunden (Stand: %(day)s)."
 
 msgid "Access tokens"
 msgstr "Zugangsschlüssel"
+
+msgid "Open batch page"
+msgstr "Chargenseite öffnen"
+
+msgid "Open task page"
+msgstr "Aufgabenseite öffnen"
+
+msgid "Open substance page"
+msgstr "Substanzseite öffnen"
+
+msgid "No batch is chosen."
+msgstr "Keine Charge ausgewählt."
+
+msgid "No task is chosen."
+msgstr "Keine Aufgabe ausgewählt."
+
+msgid "No article is chosen."
+msgstr "Kein Artikel ausgewählt."
+
+msgid "Show"
+msgstr "Anzeigen"
+
+#, python-format
+msgid "Opened on %(date)s"
+msgstr "Angebrochen am %(date)s"
+
+msgid "None"
+msgstr "Keine"
+
+msgid "Step"
+msgstr "Stufe"
+
+msgid "Done"
+msgstr "Erledigt"

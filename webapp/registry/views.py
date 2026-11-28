@@ -13,13 +13,15 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from collection import routes
 from collection.models import EntrySubstance, Procedure, Role, Sequence
 from inventory.figures import newest_first, open_amounts
 from inventory.models import Batch, Item
-from orgsyndb_web.lists import htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, htmx_detail_or_redirect,
+                                htmx_list_push_url, list_view, pick_selected,
+                                sort_value)
 from registry import snapshot
 from registry.forms import SubstanceForm
 from registry.models import Substance, SubstanceClass
@@ -29,6 +31,27 @@ from vocabulary.models import (ChemicalClass, Group, Project, ReactionType,
                                Term, descendants, is_tree, tree_order)
 
 REGISTRY = "/lab/registry/"
+SUBSTANCE_COOKIE = "substance-list-view"
+SUBSTANCE_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("name", gettext_lazy("Name"),
+               lambda s: sort_value(s.shown_name)),
+    SortColumn("key", gettext_lazy("Key"),
+               lambda s: sort_value(s.key)),
+    SortColumn("short_name", gettext_lazy("Short name"),
+               lambda s: sort_value(s.short_name)),
+    SortColumn("group", gettext_lazy("Inventory group"),
+               lambda s: sort_value(s.group.shown_label if s.group else "")),
+    SortColumn("classes", gettext_lazy("Chemical classes"),
+               lambda s: sort_value(next(
+                   (t.shown_label for t in s.chemical_classes.all()), ""))),
+    SortColumn("formula", gettext_lazy("Formula"),
+               lambda s: sort_value(s.formula)),
+    SortColumn("molar_mass", gettext_lazy("Molar mass"),
+               lambda s: sort_value(s.mw)),
+    SortColumn("article", gettext_lazy("Article no."),
+               lambda s: sort_value(s.article_number)),
+)
+SUBSTANCE_CLASSES = {"molar_mass": "number"}
 # The vocabularies by the names of their pages, each with its model and
 # its heading.
 VOCABULARIES: dict[str, tuple[type[Term], Any]] = {
@@ -61,16 +84,36 @@ def filed_under(model: type[Term], key: str) -> list[Any]:
         term.pk, *(below.pk for below in descendants(term))]
 
 
+def _substance_detail_context(substance: Substance) -> dict[str, Any]:
+    """Return the details-pane context for SUBSTANCE."""
+    items = sorted(Item.objects.filter(article_id=substance.pk)
+                   .select_related("article__substance"),
+                   key=Item.sort_key)
+    batches = newest_first(Batch.objects.filter(substance=substance))
+    stock = open_amounts(batches)
+    return {
+        "detail_substance": substance,
+        "detail_classes": [term for term, _depth in tree_order(
+            substance.chemical_classes.all())],
+        "detail_items": items,
+        "detail_batches": [(batch, stock[batch.pk]) for batch in batches],
+        "detail_tasks": sorted(Task.objects.filter(substance=substance),
+                               key=lambda task: task.serial),
+    }
+
+
+@vary_on_cookie
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def substance_list(request: HttpRequest) -> HttpResponse:
-    """List the substances, by name regardless of case: those whose key,
-    names, short name or CAS number hold the query's ``q`` regardless of
-    case, filed under the inventory group ``group`` or a group below it,
-    and of the chemical class ``class`` or a class below it, each
-    condition left out when its parameter is empty."""
+    """List the substances, by name regardless of case by default: those
+    whose key, names, short name or CAS number hold the query's ``q``
+    regardless of case, filed under the inventory group ``group`` or a
+    group below it, and of the chemical class ``class`` or a class below
+    it, each condition left out when its parameter is empty."""
     query = request.GET.get("q", "").strip()
     group = request.GET.get("group", "").strip()
     chemical_class = request.GET.get("class", "").strip()
+    order = Order.from_query(request.GET, SUBSTANCE_COLUMNS, "name")
     words = query.casefold()
     every = Substance.objects.select_related("group", "article") \
         .prefetch_related("chemical_classes").defer("structure_svg")
@@ -83,10 +126,31 @@ def substance_list(request: HttpRequest) -> HttpResponse:
                     if not words or words in searched(substance)),
                    key=lambda substance: (substance.shown_name.casefold(),
                                           substance.key))
+    shown = order.ordered(shown)
+    chosen, selected_key = pick_selected(
+        shown, request.GET.get("selected", ""), lambda s: s.key)
     groups = tree_order(Group.objects.all())
     classes = tree_order(ChemicalClass.objects.all())
+    filter_pairs: list[tuple[str, str]] = []
+    if query:
+        filter_pairs.append(("q", query))
+    if group:
+        filter_pairs.append(("group", group))
+    if chemical_class:
+        filter_pairs.append(("class", chemical_class))
+    detail = (_substance_detail_context(chosen) if chosen
+              else {"detail_substance": None, "detail_classes": [],
+                    "detail_items": [], "detail_batches": [],
+                    "detail_tasks": []})
     response = render(request, "registry/list.html", {
-        "substances": shown, "q": query, "group": group,
+        "substances": shown,
+        **detail,
+        "selected": selected_key,
+        "order": order,
+        "headers": order.headers(REGISTRY, filter_pairs, selected_key,
+                                 SUBSTANCE_CLASSES),
+        "view": list_view(request, SUBSTANCE_COOKIE),
+        "q": query, "group": group,
         "chemical_class": chemical_class,
         "groups": groups,
         "classes": classes,
@@ -95,16 +159,26 @@ def substance_list(request: HttpRequest) -> HttpResponse:
         "class_unknown": bool(chemical_class) and all(
             term.key != chemical_class for term, _ in classes),
     })
-    pairs: list[tuple[str, str]] = []
-    if query:
-        pairs.append(("q", query))
-    if group:
-        pairs.append(("group", group))
-    if chemical_class:
-        pairs.append(("class", chemical_class))
+    pairs = [*filter_pairs, *order.pairs()]
+    if selected_key:
+        pairs.append(("selected", selected_key))
     return htmx_list_push_url(
         request, response,
         f"{REGISTRY}?{urlencode(pairs)}" if pairs else REGISTRY)
+
+
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def substance_detail(request: HttpRequest, key: str) -> HttpResponse:
+    """Answer an htmx request with the details pane of substance KEY,
+    or redirect non-htmx requests to the substance list with ``selected``
+    naming the substance. Answer 404 for an unknown key."""
+    substance = get_object_or_404(
+        Substance.objects.select_related("group", "article")
+        .prefetch_related("chemical_classes").defer("structure_svg"),
+        key=key)
+    return htmx_detail_or_redirect(
+        request, REGISTRY, substance.key, "registry/list.html#detail",
+        lambda: _substance_detail_context(substance))
 
 
 def shown_yield(value: float | None) -> Decimal | None:

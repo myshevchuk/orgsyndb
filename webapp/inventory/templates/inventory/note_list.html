@@ -1,13 +1,13 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n inventory %}
 {% block title %}{% translate "End products" %} · {% translate "Deliveries" context "layer" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span id="note-count" class="lab-count">{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="note-count" class="lab-count" data-refresh>{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Item" as item_label %}{% translate "Search" as search_label %}{% translate "Number or recipient" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/deliveries/" :selected="selected" hx-get="/lab/inventory/deliveries/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#note-count:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
+{% translate "Item" as item_label %}{% translate "Search" as search_label %}{% translate "Number or recipient" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/deliveries/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/inventory/deliveries/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#note-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
 <c-filter-select name="item" :label="item_label">
 <option value=""{% if not chosen %} selected{% endif %}>{% translate "All" %}</option>
@@ -17,11 +17,11 @@
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
 <c-split-layout :view="view" cookie="delivery-list-view">
-<table class="inventory-table item-table note-table">
-<thead>
-<tr><th scope="col">{% translate "Number" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="number table-only-summary">{% translate "Lines" %}</th><th scope="col">{% translate "Contents" %}</th></tr>
+<table class="main-table note-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#note-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for note, state in notes %}<tr data-item="{{ note.pk }}" hx-get="/lab/inventory/deliveries/{{ note.pk }}/detail/" hx-trigger="item-select"{% if note == selected_note %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</td>
 <td>{{ note.date }}</td>
@@ -33,13 +33,13 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
 <header class="detail-head">
 <h2 id="item-detail-title"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</h2>
 <p>{{ note.date }} · {{ note.recipient }}</p>
 </header>
 <p class="detail-links"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{% translate "Open delivery note" %}</a></p>
-<table class="detail-table detail-table--lines">
+<table id="note-detail-lines" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Article no." %}</th>
 <th scope="col">{% translate "Name" %}</th>
@@ -51,16 +51,16 @@
 {% for line, movement, reversed in lines %}<tr>
 <td>{{ line.item.article_number|default_if_none:"" }}</td>
 <td>{{ line.item.name }}</td>
-<td>{{ line.item.container }}</td>
+<td data-sort="{{ line.item|container_sort }}">{{ line.item.container }}</td>
 <td>{% if line.batch %}<a href="/lab/inventory/batches/{{ line.batch.pk }}/">{{ line.batch }}</a>{% endif %}</td>
-<td class="number">{{ line.count }}{% if reversed %} <span class="lab-mark">{% translate "reversed" %}</span>{% endif %}</td>
+<td class="number" data-sort="{{ line.count }}">{{ line.count }}{% if reversed %} <span class="lab-mark">{% translate "reversed" %}</span>{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
 {% if note.note %}<h3>{% translate "Note" context "inventory" %}</h3>
 <div class="lab-note">{{ note.note|linebreaks }}</div>
 {% endif %}</aside>
-{% else %}<aside id="item-detail" class="item-detail">
+{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No delivery note is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>

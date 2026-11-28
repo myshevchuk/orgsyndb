@@ -6,4 +6,6 @@ from planning import views
 
 urlpatterns = [
     path("", views.planning_list, name="planning_list"),
+    path("<path:number>/detail/", views.planning_detail,
+         name="planning_detail"),
 ]

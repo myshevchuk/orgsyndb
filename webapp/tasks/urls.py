@@ -10,6 +10,7 @@ urlpatterns = [
     path("steps/<int:step>/journal/", views.step_journal,
          name="step_journal"),
     path("<str:number>/", views.task_page, name="task"),
+    path("<str:number>/detail/", views.task_detail, name="task_detail"),
     path("<str:number>/edit/", views.task_edit, name="task_edit"),
     path("<str:number>/<str:action>/", views.task_action,
          name="task_action"),

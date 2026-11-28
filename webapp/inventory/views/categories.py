@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
@@ -22,7 +23,8 @@ from inventory.views.common import (CHEMICAL_COOKIE, CHEMICALS,
                                     htmx_detail_or_redirect, list_view,
                                     oldest_vessel_order, pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
-from orgsyndb_web.lists import htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, htmx_list_push_url,
+                                pairs_sort_key, sort_value)
 from vocabulary.models import ChemicalClass, Group, Term, descendants, tree_order
 
 
@@ -124,9 +126,8 @@ class CategoryFilters:
             sealed=query.get("sealed") == "1",
         )
 
-    def query_string(self, category: str, selected: str = "") -> str:
-        """Return the active filter parameters, and SELECTED when given,
-        encoded with a leading ``?``, or empty when none are set."""
+    def filter_pairs(self, category: str) -> list[tuple[str, str]]:
+        """Return the active filter parameters for CATEGORY."""
         pairs: list[tuple[str, str]] = []
         if self.q:
             pairs.append(("q", self.q))
@@ -146,6 +147,16 @@ class CategoryFilters:
                 pairs.append(("supplier", self.supplier))
             if self.sealed:
                 pairs.append(("sealed", "1"))
+        return pairs
+
+    def query_string(self, category: str, selected: str = "",
+                     extra: list[tuple[str, str]] | None = None) -> str:
+        """Return the active filter parameters, EXTRA pairs, and SELECTED
+        when given, encoded with a leading ``?``, or empty when none are
+        set."""
+        pairs = self.filter_pairs(category)
+        if extra:
+            pairs.extend(extra)
         if selected:
             pairs.append(("selected", selected))
         return "?" + urlencode(pairs) if pairs else ""
@@ -309,19 +320,84 @@ def _offered_options(all_vessels: list[Vessel], filters: CategoryFilters,
     return sorted(locations, key=natural), suppliers
 
 
+def _oldest_age_days(row: CategoryRow, today: date) -> Any:
+    dates = [vessel.batch.date for vessel in row.vessels
+             if vessel.batch.date is not None]
+    if not dates:
+        return None
+    return sort_value(max(0, (today - min(dates)).days))
+
+
+def _location_sort(row: CategoryRow) -> Any:
+    if row.locations.first:
+        return sort_value(row.locations.first)
+    if row.locations.in_flask:
+        return sort_value(_("in flask"))
+    return None
+
+
+def _source_sort(row: CategoryRow) -> Any:
+    if not row.sources:
+        return None
+    if row.sources.task_numbers:
+        return sort_value(row.sources.task_numbers[0])
+    if row.sources.no_task:
+        return sort_value(_("no task"))
+    return None
+
+
+def _category_columns(is_int: bool, today: date) -> tuple[SortColumn, ...]:
+    if is_int:
+        return (
+            SortColumn("substance", gettext_lazy("Substance"),
+                       lambda row: sort_value(row.substance.shown_name)),
+            SortColumn("amount", gettext_lazy("Amount"),
+                       lambda row: pairs_sort_key(row.amounts)),
+            SortColumn("vessels", gettext_lazy("Vessels"),
+                       lambda row: sort_value(row.vessel_count)),
+            SortColumn("location", gettext_lazy("Location"), _location_sort),
+            SortColumn("source", gettext_lazy("Source"), _source_sort),
+            SortColumn("age", gettext_lazy("Age"),
+                       lambda row: _oldest_age_days(row, today)),
+        )
+    return (
+        SortColumn("substance", gettext_lazy("Substance"),
+                   lambda row: sort_value(row.substance.shown_name)),
+        SortColumn("group", gettext_lazy("Group"),
+                   lambda row: sort_value(
+                       row.substance.group.shown_label
+                       if row.substance.group else "")),
+        SortColumn("amount", gettext_lazy("Amount"),
+                   lambda row: pairs_sort_key(row.amounts)),
+        SortColumn("vessels", gettext_lazy("Vessels"),
+                   lambda row: sort_value(row.vessel_count)),
+        SortColumn("location", gettext_lazy("Location"), _location_sort),
+        SortColumn("suppliers", gettext_lazy("Suppliers"),
+                   lambda row: sort_value(
+                       row.suppliers.first if row.suppliers else "")),
+        SortColumn("opened", gettext_lazy("Opened"),
+                   lambda row: sort_value(
+                       row.opened_on if row.opened_on else _("sealed"))),
+    )
+
+
 def category_list_response(request: HttpRequest, category: str
                            ) -> HttpResponse:
     """Render the intermediate or commercial chemical list for CATEGORY."""
     config = CONFIGS[category]
     today = timezone.localdate()
     filters = CategoryFilters.from_query(request.GET, category)
+    order = Order.from_query(
+        request.GET, _category_columns(config.is_intermediate, today),
+        "substance")
     all_vessels = list(category_vessels(category))
     admitted = filter_category_vessels(all_vessels, filters, category, today)
     other_substances = set(Vessel.objects.open().filter(
         batch__substance__article__isnull=True,
         batch__source=config.other_source,
     ).values_list("batch__substance_id", flat=True))
-    rows = category_rows(admitted, category, today, other_substances)
+    rows = order.ordered(
+        category_rows(admitted, category, today, other_substances))
 
     offered_locations, offered_suppliers = _offered_options(
         all_vessels, filters, config.is_intermediate)
@@ -333,6 +409,7 @@ def category_list_response(request: HttpRequest, category: str
                if config.is_intermediate else [])
     groups = ([] if config.is_intermediate
               else tree_order(Group.objects.select_related("parent")))
+    filter_pairs = filters.filter_pairs(category)
     response = render(request, "inventory/category_list.html", {
         "category": category,
         "is_intermediate": config.is_intermediate,
@@ -347,6 +424,9 @@ def category_list_response(request: HttpRequest, category: str
         "single_vessel": single_vessel,
         "ledger": vessel_ledger(single_vessel, 5) if single_vessel else [],
         "selected": selected,
+        "order": order,
+        "headers": order.headers(config.base_url, filter_pairs, selected,
+                                 {"amount": "number"}),
         "view": list_view(request, config.cookie),
         "filters": filters,
         "filter_query": filters.query_string(category),
@@ -360,7 +440,8 @@ def category_list_response(request: HttpRequest, category: str
     })
     return htmx_list_push_url(
         request, response,
-        config.base_url + filters.query_string(category, selected))
+        config.base_url + filters.query_string(
+            category, selected, extra=order.pairs()))
 
 
 def category_detail_response(request: HttpRequest, category: str, key: str

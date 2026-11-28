@@ -1,29 +1,27 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n planning inventory lab %}
 {% block title %}{% translate "Planning" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-{% translate "Planning" as heading %}<c-list-heading :title="heading">
-<c-slot name="actions"><p class="actions">{% if all %}<a href="/lab/planning/">{% translate "Urgent articles only" %}</a>{% else %}<a href="/lab/planning/?all=1">{% translate "All articles" %}</a>{% endif %}</p></c-slot>
-</c-list-heading>
-{% if rows %}<div class="planning-grid" data-controller="split-list" data-split-list-mode-value="local">
-{% translate "Planning list" as list_title %}<c-widget :title="list_title" count="{{ rows|length }}" count_attr="data-planning-count" extra_class="planning-list" flush>
-<c-slot name="head_extra"><div class="planning-filters" role="group" aria-label="{% translate "Filter" context "planning" %}" hidden>
-<button type="button" class="planning-filter" data-plan-filter="all" aria-pressed="true">{% translate "All" %}</button>
-<button type="button" class="planning-filter" data-plan-filter="high" aria-pressed="false">{% translate "High priority" %}</button>
-<button type="button" class="planning-filter" data-plan-filter="action" aria-pressed="false">{% translate "With action" %}</button>
-<button type="button" class="planning-filter" data-plan-filter="late" aria-pressed="false">{% translate "Late" %}</button>
-</div></c-slot>
-<div class="table-scroll">
-<table id="planning-list" class="widget-table planning-table" data-sortable data-controller="sortable-table">
-<thead>
-<tr><th scope="col">{% translate "Article" %}</th><th scope="col" class="num">{% translate "Runway" %}</th><th scope="col" class="num">{% translate "Synthesis time" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Tasks" %}</th><th scope="col">{% translate "Actions" context "planning" %}</th></tr>
+{% translate "Planning" as heading %}<c-list-heading :title="heading" count="{{ rows|length }}" count_id="planning-count" count_refresh />
+{% translate "Show" as show_label %}{% translate "All articles" as all_label %}<c-filter-bar id="filters" action="/lab/planning/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/planning/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, change target:(select, input[type=checkbox])" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#planning-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
+<c-filter-select name="show" :label="show_label">
+{% for value, label in show_choices %}<option value="{{ value }}"{% if value == show %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</c-filter-select>
+<c-filter-check name="all" :label="all_label" :checked="all" />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
+</c-filter-bar>
+<c-split-layout :view="view" cookie="planning-list-view">
+<table class="main-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#planning-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody>
-{% for row in rows %}{% with found=row.forecast %}<tr data-article="{{ found.article_number }}" data-priority="{{ found.priority }}"{% if row.fill or row.check_bulk or row.plan_synthesis %} data-action="1"{% endif %}{% if row.tasks|has_late %} data-late="1"{% endif %}{% if found.article_number == selected %} aria-current="true"{% endif %}>
-<td><a class="planning-select" href="/lab/planning/?{% if all %}all=1&amp;{% endif %}selected={{ found.article_number|urlencode:"" }}">{{ found.substance.shown_name }}</a> <span class="kv-sub compound-key">{{ found.article_number }}</span></td>
-<td class="num" data-sort="{{ found.runway|whole_days }}">{{ found.runway|days }}{{ found.rough|rough }}</td>
-<td class="num" data-sort="{{ found.synthesis_days|whole_days }}">{{ found.synthesis_days|days }}</td>
-<td class="{% if found.latest_start %}nowrap{% else %}muted{% endif %}" data-sort="{% if found.latest_start %}{{ found.latest_start|date:'Y-m-d' }}{% else %}–{% endif %}">{{ found.latest_start|default_if_none:"–" }}</td>
-<td data-sort="{{ found.priority|priority_rank }}"><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></td>
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for row in rows %}{% with found=row.forecast %}<tr data-item="{{ found.article_number }}" hx-get="/lab/planning/{{ found.article_number|urlencode:"" }}/detail/{{ row_query }}" hx-trigger="item-select"{% if found.article_number == selected %} aria-current="true"{% endif %}>
+<td>{% substance found.substance %} <span class="kv-sub compound-key">{{ found.article_number }}</span></td>
+<td class="num">{{ found.runway|days }}{{ found.rough|rough }}</td>
+<td class="num">{{ found.synthesis_days|days }}</td>
+<td class="{% if found.latest_start %}nowrap{% else %}muted{% endif %}">{{ found.latest_start|default_if_none:"–" }}</td>
+<td><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></td>
 <td{% if not row.tasks %} class="muted"{% endif %}>{% if row.tasks %}<ul class="planning-lines">
 {% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}</li>
 {% endfor %}</ul>{% else %}–{% endif %}</td>
@@ -34,17 +32,49 @@
 {% empty %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?substance={{ found.substance.key|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
 {% endfor %}{% endif %}</ul>{% else %}–{% endif %}</td>
 </tr>
-{% endwith %}{% endfor %}</tbody>
+{% endwith %}{% empty %}<tr><td colspan="7" class="lab-empty">{% if show and has_unfiltered %}{% translate "No row matches the filter." %}{% elif all %}{% translate "No article has a forecast." %}{% else %}{% translate "No article needs a synthesis or another action." %}{% endif %}</td></tr>
+{% endfor %}</tbody>
+</table>
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_row %}{% with row=detail_row found=detail_row.forecast %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ found.article_number }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title">{{ found.substance.shown_name }} <span class="kv-sub compound-key">{{ found.article_number }}</span></h2>
+</header>
+{% translate "Containers and demand" as containers_title %}<c-widget :title="containers_title" :note="found.article_number" note_class="compound-key" flush>
+<div class="table-scroll">
+<table id="planning-detail-containers" class="aux-table" data-sortable data-controller="sortable-table">
+<thead>
+<tr><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Stock" %}</th><th scope="col" class="num">{% translate "Runway" %}</th><th scope="col" class="num">{% translate "Demand per year" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in found.items %}<tr>
+<td class="nowrap" data-sort="{{ entry.item|container_sort }}"><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a></td>
+<td data-sort="{{ entry.item.quantity }}"><span class="stock level-{{ entry.figures.level }}">{{ entry.item.quantity }} <span class="level-label">{{ entry.figures.level|level_label }}</span></span></td>
+<td class="num{% if entry.runway_on_hand is None %} muted{% endif %}"{% if entry.runway_on_hand is not None %} data-sort="{{ entry.runway_on_hand|whole_days }}"{% endif %}>{% if entry.runway_on_hand is not None %}{{ entry.runway_on_hand|days }}{% else %}–{% endif %}</td>
+<td class="num{% if entry.per_year is None %} muted{% endif %}">{% if entry.per_year is not None %}{{ entry.per_year|decimal }}{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
 </table>
 </div>
-<p class="lab-empty planning-no-match" hidden>{% translate "No row matches the filter." %}</p>
-<p class="visually-hidden planning-status" role="status" data-text="{% translate "Rows shown: {n}" %}"></p>
 </c-widget>
-<aside class="planning-inspector" aria-label="{% translate "Article details" %}">
-{% for row in rows %}{% include "planning/inspector.html" %}{% endfor %}
+{% translate "Planning details" as details_title %}<c-widget :title="details_title" flush>
+<c-slot name="note_slot"> <span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></c-slot>
+<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Substance" %}</th><td>{% substance found.substance %}</td></tr>
+<tr><th scope="row">{% translate "Last delivery" %}</th><td{% if not found.last_delivery %} class="muted"{% endif %}>{{ found.last_delivery|default_if_none:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Bulk" %}</th><td{% if not found.usable_bulk %} class="muted"{% endif %}>{{ found.usable_bulk|amount }} {{ found.bulk_unit_label }}</td></tr>
+<tr><th scope="row">{% translate "Runway" %}</th><td><strong>{{ found.runway|days }}</strong>{{ found.rough|rough }}</td></tr>
+<tr><th scope="row">{% translate "Synthesis time" %}</th><td><strong>{{ found.synthesis_days|days }}</strong> <span class="kv-sub">{% include "planning/basis.html" %}</span></td></tr>
+<tr><th scope="row">{% translate "Latest start" %}</th><td{% if not found.latest_start %} class="muted"{% endif %}>{% if found.latest_start %}<strong>{{ found.latest_start }}</strong>{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Tasks" %}</th><td{% if not row.tasks %} class="muted"{% endif %}>{% if row.tasks %}<ul class="planning-lines">
+{% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %} <span class="kv-sub">{% blocktranslate with end=line.end|date:"SHORT_DATE_FORMAT" %}expected end {{ end }}{% endblocktranslate %}</span></li>
+{% endfor %}</ul>{% else %}–{% endif %}</td></tr>
+</tbody></table>
+</c-widget>
 </aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+<p class="lab-empty">{% translate "No article is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% include "planning/parameters.html" %}
-</div>
-{% else %}<p>{% if all %}{% translate "No article has a forecast." %}{% else %}{% translate "No article needs a synthesis or another action." %}{% endif %}</p>
-{% include "planning/parameters.html" %}
-{% endif %}{% endblock %}
+{% endblock %}

@@ -10,7 +10,8 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
-from django.views.decorators.vary import vary_on_headers
+from django.utils.translation import gettext_lazy
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -19,11 +20,49 @@ from inventory.forms import BatchEditForm, BatchForm
 from inventory.history import history_entries
 from inventory.models import (Batch, DeliveryLine, Item, Movement, Source,
                               VesselMovement)
-from inventory.views.common import (BATCHES, batch_url, form_page, locations,
-                                    saved, tabs)
+from inventory.views.common import (BATCH_COOKIE, BATCHES, batch_source_text,
+                                    batch_url, form_page,
+                                    htmx_detail_or_redirect, list_view,
+                                    locations, pick_selected, saved, tabs)
 from journal.entries import entry_for
-from orgsyndb_web.lists import htmx_list_push_url
+from orgsyndb_web.lists import (Order, SortColumn, amount_sort_key,
+                                htmx_list_push_url, pairs_sort_key, sort_value)
 from tasks.models import Task, TaskStep
+
+
+def _yield_sort(batch: Batch) -> Any:
+    if batch.yield_amount is None:
+        return None
+    return amount_sort_key(batch.shown_yield, batch.yield_unit)
+
+
+BATCH_COLUMNS: tuple[SortColumn, ...] = (
+    SortColumn("batch", gettext_lazy("Batch"),
+               lambda row: sort_value(str(row[0]))),
+    SortColumn("name", gettext_lazy("Name"),
+               lambda row: sort_value(row[0].substance.shown_name)),
+    SortColumn("article", gettext_lazy("Article no."),
+               lambda row: sort_value(row[0].article_number)),
+    SortColumn("source", gettext_lazy("Source"),
+               lambda row: sort_value(batch_source_text(row[0]))),
+    SortColumn("notebook", gettext_lazy("Lab notebook"),
+               lambda row: sort_value(
+                   str(row[0].journal_entry)
+                   if row[0].journal_entry else "")),
+    SortColumn("date", gettext_lazy("Date"),
+               lambda row: sort_value(row[0].date)),
+    SortColumn("yield", gettext_lazy("Yield"),
+               lambda row: _yield_sort(row[0])),
+    SortColumn("stock", gettext_lazy("Stock"),
+               lambda row: pairs_sort_key(row[1])),
+)
+BATCH_CLASSES = {"yield": "number", "stock": "number"}
+
+
+def _batch_detail_context(batch: Batch) -> dict[str, Any]:
+    vessels = sorted(batch.vessels.open().with_substance(),
+                     key=lambda vessel: vessel.pk)
+    return {"detail_batch": batch, "detail_vessels": vessels}
 
 
 @dataclass(frozen=True)
@@ -47,14 +86,17 @@ class LineRow:
     reversed: bool
 
 
+@vary_on_cookie
 @vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def batch_list(request: HttpRequest) -> HttpResponse:
-    """List the batches of every substance, newest date first and
-    undated ones last, then newest recorded first, each with the amount
-    in its open vessels; ``q`` selects those in whose number, supplier's
-    batch number or supplier, or in whose substance's key or names, the
-    text is found regardless of case."""
+    """List the batches of every substance, newest date first by default
+    and undated ones last, then newest recorded first, each with the
+    amount in its open vessels; ``q`` selects those in whose number,
+    supplier's batch number or supplier, or in whose substance's key or
+    names, the text is found regardless of case."""
     q = request.GET.get("q", "").strip()
+    order = Order.from_query(request.GET, BATCH_COLUMNS, "date",
+                             default_descending=True)
     words = q.casefold()
     found = []
     for batch in Batch.objects.select_related(
@@ -68,14 +110,42 @@ def batch_list(request: HttpRequest) -> HttpResponse:
             found.append(batch)
     found = newest_first(found)
     stock = open_amounts(found)
+    rows = order.ordered([(batch, stock[batch.pk]) for batch in found])
+    chosen, selected = pick_selected(
+        rows, request.GET.get("selected", ""), lambda row: row[0].pk)
+    filter_pairs = [("q", q)] if q else []
+    detail = _batch_detail_context(chosen[0]) if chosen else {
+        "detail_batch": None, "detail_vessels": []}
     response = render(request, "inventory/batch_list.html", {
-        "rows": [(batch, stock[batch.pk]) for batch in found],
+        "rows": rows,
+        **detail,
+        "selected": selected,
+        "order": order,
+        "headers": order.headers(BATCHES, filter_pairs, selected,
+                                 BATCH_CLASSES),
+        "view": list_view(request, BATCH_COOKIE),
         "q": q,
         "tabs": tabs(BATCHES),
     })
+    pairs = [*filter_pairs, *order.pairs()]
+    if selected:
+        pairs.append(("selected", selected))
     return htmx_list_push_url(
         request, response,
-        f"{BATCHES}?{urlencode({'q': q})}" if q else BATCHES)
+        f"{BATCHES}?{urlencode(pairs)}" if pairs else BATCHES)
+
+
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def batch_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer an htmx request with the details pane of batch PK alone,
+    or redirect non-htmx requests to the batch list with ``selected``
+    naming the batch. Answer 404 for an unknown ID."""
+    batch = get_object_or_404(Batch.objects.select_related(
+        "substance__article", "journal_entry__notebook",
+        "task_step__task"), pk=pk)
+    return htmx_detail_or_redirect(
+        request, BATCHES, batch.pk, "inventory/batch_list.html#detail",
+        lambda: _batch_detail_context(batch))
 
 
 def batch_page(request: HttpRequest, pk: int) -> HttpResponse:

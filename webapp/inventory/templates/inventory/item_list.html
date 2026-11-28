@@ -2,7 +2,7 @@
 {% block title %}{% translate "End products" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block head %}<style>
-{% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .item-table .col-{{ column.key }} { display: none; }
+{% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .main-table .col-{{ column.key }} { display: none; }
 {% endfor %}</style>{% endblock %}
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
@@ -20,9 +20,9 @@
 {% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
 {% endfor %}</c-filter-select>
 <span id="filter-hidden">{% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
-{% endif %}<input type="hidden" name="sort" value="{{ filters.sort }}">
-{% if filters.descending %}<input type="hidden" name="dir" value="desc">
-{% endif %}</span><c-slot name="after"><div class="lab-control lab-control--inline">
+{% endif %}{% if sort_order.sort_field %}<input type="hidden" name="sort" value="{{ sort_order.sort_field }}">
+{% if sort_order.dir_field %}<input type="hidden" name="dir" value="{{ sort_order.dir_field }}">
+{% endif %}{% endif %}</span><c-slot name="after"><div class="lab-control lab-control--inline">
 <span id="stock-filter-label" class="lab-field-prefix">{% translate "Stock status" %}:</span>
 <button type="button" id="stock-filter" class="lab-menu-button" data-refresh popovertarget="stock-menu" aria-labelledby="stock-filter-label stock-filter">{% if stock_choice.level %}{{ stock_choice.label }}{% else %}{% translate "All" %}{% endif %} ({{ stock_choice.count }})</button>
 <div id="stock-menu" class="lab-popup stock-menu" popover data-controller="popover-anchor">
@@ -73,8 +73,8 @@
 </details>
 {% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view">
-<table class="inventory-table item-table">
+<c-split-layout :view="view" cookie="item-list-view">
+<table class="main-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#item-count:morph,#list-summary:morph,#item-head:morph,#item-detail:morph,#stock-filter:morph,#stock-entries:morph,#more-filters-button:morph,#filters:morph,#more-filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for column in columns %}<c-sort-th :label="column.label" :href="column.href" :classes="column.classes" :aria_sort="column.aria_sort" :unit="column.unit" hx-get="{{ column.href }}" />{% endfor %}</tr>
 </thead>
@@ -112,7 +112,7 @@
 <ol class="quarter-bars">
 {% for bar in statistics.bars %}<li class="quarter-bar{% if bar.current %} current{% endif %}">{% if bar.value is not None %}<span class="bar-value">{{ bar.value }}</span><span class="bar" style="height: {{ bar.share|unlocalize }}%"></span>{% endif %}<span class="bar-label">Q{{ bar.quarter }}{% if bar.current %} {% translate "running" context "quarter" %}{% endif %}</span></li>
 {% endfor %}</ol>
-<table class="detail-table">
+<table class="aux-table">
 <thead>
 <tr><th scope="col">{% translate "Year" %}</th>{% for bar in statistics.bars %}<th scope="col" class="number">Q{{ bar.quarter }}</th>{% endfor %}<th scope="col" class="number">{% translate "Total" %}</th></tr>
 </thead>

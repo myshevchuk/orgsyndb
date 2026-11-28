@@ -1,10 +1,11 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{% translate "Tasks" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "Tasks" as heading %}<c-list-heading :title="heading">
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/tasks/new/">{% translate "New task" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
-{% translate "State" as state_label %}{% translate "Person" as person_label %}{% translate "Priority" as priority_label %}{% translate "Search" as search_label %}<c-filter-bar id="filters" action="/lab/tasks/" :toolbar="False" hx-get="/lab/tasks/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#task-rows" hx-select="#task-rows" hx-swap="morph:outerHTML" hx-select-oob="#task-counts:morph">
+{% translate "State" as state_label %}{% translate "Person" as person_label %}{% translate "Priority" as priority_label %}{% translate "Search" as search_label %}<c-filter-bar id="filters" action="/lab/tasks/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/tasks/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#task-counts:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
 <c-filter-select name="state" :label="state_label" :inline="False">
 {% for value, label in state_filters %}<option value="{{ value }}"{% if value == filters.state %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
@@ -18,15 +19,16 @@
 {% for value, label in priorities %}<option value="{{ value }}"{% if value == filters.priority %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
 <c-filter-search id="filter-q" :value="filters.q" :label="search_label" :inline="False" />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<p id="task-counts" class="count">{% blocktranslate with planned=counts.planned running=counts.running followup=counts.followup %}{{ planned }} planned · {{ running }} running · {{ followup }} follow-up{% endblocktranslate %}</p>
-<div class="table-scroll">
-<table class="task-table">
-<thead>
-<tr><th>{% translate "No." %}</th><th>{% translate "Product" %}</th><th>{% translate "Priority" %}</th><th>{% translate "Assignee" %}</th><th>{% translate "Started" %}</th><th>{% translate "Ended" context "date" %}</th><th>{% translate "Progress" %}</th><th>{% translate "Batch" %}</th><th>{% translate "Report" %}</th><th>{% translate "QC list" %}</th><th>{% translate "State" %}</th></tr>
+<p id="task-counts" class="count" data-refresh>{% blocktranslate with planned=counts.planned running=counts.running followup=counts.followup %}{{ planned }} planned · {{ running }} running · {{ followup }} follow-up{% endblocktranslate %}</p>
+<c-split-layout :view="view" cookie="task-list-view">
+<table class="main-table">
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#task-counts:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="task-rows">
-{% for task, shown, batches in tasks %}<tr id="task-row-{{ task.pk }}" data-state="{{ task.state }}">
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for task, shown, batches in tasks %}<tr id="task-row-{{ task.pk }}" data-state="{{ task.state }}" data-item="{{ task.number }}" hx-get="/lab/tasks/{{ task.number }}/detail/" hx-trigger="item-select"{% if task == detail_task %} aria-current="true"{% endif %}>
 <td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
 <td>{% substance task.substance %}</td>
 <td>{% include "tasks/priority.html" %}</td>
@@ -41,5 +43,52 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div>
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_task %}{% with task=detail_task shown=detail_shown %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ task.number }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/tasks/{{ task.number }}/">{{ task.number }} · {{ task.substance.shown_name }}</a></h2>
+<p>{% include "tasks/state.html" %}</p>
+</header>
+<dl class="detail-location">
+<dt>{% translate "Priority" %}</dt>
+<dd>{% include "tasks/priority.html" %}</dd>
+<dt>{% translate "Assignee" %}</dt>
+<dd>{% if task.assignee %}{% person task.assignee %}{% else %}–{% endif %}</dd>
+<dt>{% translate "Started" %}</dt>
+<dd>{{ task.started|default_if_none:"–" }}</dd>
+<dt>{% translate "Ended" context "date" %}</dt>
+<dd>{{ task.ended|default_if_none:"–" }}</dd>
+<dt>{% translate "Progress" %}</dt>
+<dd>{% with counts=task.step_counts %}{% if counts.1 %}{{ counts.0 }}/{{ counts.1 }}{% else %}–{% endif %}{% endwith %}</dd>
+<dt>{% translate "Batch" %}</dt>
+<dd>{% for batch in detail_batches %}<a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a>{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>
+<dt>{% translate "Report" %}</dt>
+<dd>{{ task.report|yes_no }}</dd>
+<dt>{% translate "QC list" %}</dt>
+<dd>{{ task.qc_list|yes_no }}</dd>
+<dt>{% translate "Note" %}</dt>
+<dd>{{ task.note|default:"–" }}</dd>
+</dl>
+<p class="detail-links"><a href="/lab/tasks/{{ task.number }}/">{% translate "Open task page" %}</a></p>
+{% if user.is_authenticated %}<p class="lab-actions"><a href="/lab/tasks/{{ task.number }}/edit/">{% translate "Edit" %}</a></p>
+{% endif %}{% if detail_steps %}<h3>{% translate "Steps" %}</h3>
+<table id="task-detail-steps" class="aux-table" data-sortable data-controller="sortable-table">
+<thead><tr>
+<th scope="col">{% translate "Step" %}</th>
+<th scope="col">{% translate "Procedure" %}</th>
+<th scope="col">{% translate "Done" %}</th>
+</tr></thead>
+<tbody>
+{% for step in detail_steps %}<tr>
+<td>{{ step.position }}</td>
+<td>{% if step.signature %}{{ step.procedure }} {% marked step.signature %}{% elif step.procedure %}{% procedure step.procedure step.known %}{% if step.number %} {% blocktranslate with number=step.number %}Entry {{ number }}{% endblocktranslate %}{% endif %}{% endif %}</td>
+<td{% if step.done_on %} data-sort="{{ step.done_on|date:'Y-m-d' }}"{% endif %}>{{ step.done_on|default_if_none:"" }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% endif %}</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
+<p class="lab-empty">{% translate "No task is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}
