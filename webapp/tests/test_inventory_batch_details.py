@@ -39,6 +39,7 @@ class BatchDetailsCase(InventoryCase):
         journal entry ``AE-1/9``, with a stored vessel of 2 g in
         ``Kühlschrank 2`` and a used-up flask."""
         make_notebook("AE-1", self.ae)
+        self.item("CH-0012")
         batch = make_batch(
             self.kl, "CH-0012", number="KL0412",
             journal_entry=entry_of("AE-1/9"), date=date(2026, 10, 30),

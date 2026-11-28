@@ -216,10 +216,11 @@ class EndpointTests(TaskDetailsCase):
 
     def test_an_action_still_reaches_the_task_action(self) -> None:
         task = make_task(self.kl, "Aspirin")
+        self.client.force_login(self.kl)
         self.assertEqual(
-            self.client.post(f"{TASKS}{task.number}/cancel/").status_code,
+            self.client.post(f"{TASKS}{task.number}/start/").status_code,
             302)
-        self.assertTrue(Task.objects.get(pk=task.pk).cancelled)
+        self.assertIsNotNone(Task.objects.get(pk=task.pk).started)
 
     def test_the_answer_varies_on_the_headers_it_reads(self) -> None:
         task = self.sequenced()

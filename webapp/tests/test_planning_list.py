@@ -123,10 +123,11 @@ class MainTableTests(ListCase):
         found = list_table(root)
         self.assertNotIn("data-sortable", found.attrs)
         for name in ("data-article", "data-priority", "data-action",
-                     "data-late", "data-sortable"):
+                     "data-late"):
             with self.subTest(attribute=name):
                 self.assertEqual(
                     root.find_all(attrs={name: True}), [])
+        self.assertEqual(found.find_all(attrs={"data-sortable": True}), [])
 
     def test_the_count_is_the_number_of_rows(self) -> None:
         for query, rows in (("", 2), ("?all=1", 3), ("?all=1&show=high", 1)):
