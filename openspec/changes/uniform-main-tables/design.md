@@ -88,15 +88,18 @@ requirement's "the same position on every page".
   still searches the note (Item list's filters are unchanged).
 - The `Spalten` menu, its inline `<style>`, the `Ansicht` menu, and
   `SplitListController`'s columns-button handling go.
-- `RememberController` and `ViewMenuController` go, with
-  `PopoverAnchorController`'s closing of `details.lab-view-menu`, and
+- `RememberController` and `ViewMenuController` go, with the `storage`
+  helper only `RememberController` reads, `PopoverAnchorController`'s
+  closing of `details.lab-view-menu`, the file's controller list entries
+  for both, and
   every CSS rule that names `#row-height`, `#heat-switch`,
   `.lab-view-menu`, `.lab-view-controls`, `.heat-legend`, `.table-only`,
   `.lab-columns` or `#columns-menu`.
 - The heat scale (`wenig`, five swatches, `viel`) moves into
   `.lab-table-note`, after the stock legend. Its hint says the details
   view shows the chosen item's details; it stops listing columns the
-  details view no longer hides.
+  details view no longer hides. The item list's `View` string (context
+  `item list`) stays: the view switch uses it.
 - Values users stored under `orgsyndb:item-list:*` in `localStorage` are
   left alone; nothing reads them again.
 
@@ -108,9 +111,14 @@ decides how means are computed.
 
 ### 5. One main-table look
 
-- Row height: the compact one, `1.875rem` at `0.8125rem`, single line,
-  for all ten lists; no list overrides it. Planning's `Artikel` cell puts
-  the article number before the name on one line, as the bulk list does.
+- Row height: the compact one, `1.875rem` at `0.8125rem`, for all ten
+  lists; no list overrides it. A cell of one value stays on one line;
+  cells that list several values (delivery contents, planning tasks and
+  actions) may grow. Planning's `Artikel` cell puts the article number
+  before the name on one line, as the bulk list does, without the
+  `kv-sub` block. The intermediate and chemical lists' rule
+  `.category-table td:first-child { white-space: normal; min-width:
+  14rem }` goes.
 - Bold: the column naming the record, plus one column per list:
 
   | List | Record column | Second column |
@@ -127,12 +135,17 @@ decides how means are computed.
   | substance | `name` | `article` |
 
   Bold comes from one rule on a class (`col-strong`) set on those
-  columns' header and cells, replacing the per-list rules such as
-  `.category-table td:first-child a`.
-- Widths: name columns are capped (`max-width` with `text-overflow:
-  ellipsis`, the whole name in `title`); other columns keep their natural
-  width. The ui-specialist sets the cap so that each list fits; the rest
-  of the row fills from the table's natural width.
+  columns' header and cells. Headers are already semi-bold, so the rule
+  changes the look of cells (`.main-table td.col-strong`, links in them
+  included). It replaces the per-list rules such as
+  `.category-table td:first-child a` and `.bulk-table td:first-child a`;
+  `.cat-amount` stays, as the category panes' tables use it.
+- Widths: name columns are capped on screen (`max-width` with
+  `overflow: hidden` and `text-overflow: ellipsis`, inside `@media
+  screen`, so paper keeps whole names); the templates give each capped
+  cell the whole name in `title`. Other columns keep their natural
+  width. The ui-specialist sets the cap so that each list fits. Whether
+  the caps suffice is unverified until the screenshots of tasks 5.2.
 - Dead rules go: `.col-note`, the unused `.col-fill`, and the print test's
   assertion on it.
 
@@ -140,8 +153,12 @@ decides how means are computed.
 
 The task and substance lists use the inline filter controls
 (`c-filter-select` and `c-filter-search` without `:inline="False"`), as
-the inventory and planning lists do. Their labels stay, as the controls'
-prefixes or as visually hidden text.
+the inventory and planning lists do. Their labels stay, as the selects'
+prefixes and as the search fields' visually hidden text. An inline search
+field shows no label, so each gets a placeholder naming what it searches:
+`Nr., Substanz, Charge oder Notiz` (`Number, substance, batch or note`)
+on the task list and `Name, Kurzname, Schlüssel oder CAS` (`Name, short
+name, key or CAS`) on the substance list.
 
 ## Risks / Trade-offs
 

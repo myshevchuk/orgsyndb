@@ -8,33 +8,52 @@
   `details.lab-view-menu`, no `#row-height` and no `#heat-switch`; heat
   classes are on the mean and current-year cells; `.lab-table-note`
   holds the heat scale's five swatches. Remove the tests of the removed
-  scenarios "Base columns first" and "Columns a user may hide".
+  scenarios "Base columns first" and "Columns a user may hide", and the
+  `#row-height` and `#heat-switch` entries of `KEPT` in
+  `test_inventory_dialogs.py`.
 - [ ] 1.2 Projected mark (`end-product-inventory` "Consumption"): no
   element carries `projected` and no page holds `hochgerechnet aus dem
-  laufenden Jahr`, on the item list, its details and the item page, for
-  an item with projected means (`test_inventory_consumption.py`,
-  `test_inventory_detail.py`, `test_widgets_item_page.py`,
-  `test_inventory_states.py`, `test_demo_records.py`); the figures keep
-  their projected values.
+  laufenden Jahr`, on the item list (`test_inventory_lists.py`, whose
+  assertion of `projected` on the `Ø Jahr` cell flips), its details
+  (`test_inventory_detail.py`) and the item page
+  (`test_widgets_item_page.py`), for an item with projected means; check
+  `test_inventory_states.py` and `test_demo_records.py` for the same.
+  `test_inventory_consumption.py` keeps its model-level checks of
+  `figures.projected`.
 - [ ] 1.3 Vessel list (`end-product-inventory` "Vessel list", `web-app`
   "Main lists"): no `Bemerkung` column and no `sort=note`
-  (`test_inventory_vessels.py`, `test_main_lists.py` through
+  (`test_inventory_lists.py`'s `VESSELS_DE`/`VESSELS_EN` and row checks,
   `main_lists_support.py`'s table of lists); the vessel details still
-  show the note.
+  show the note (`test_inventory_vessel_details.py`).
 - [ ] 1.4 Script (`test_lab_script.py`, `test_stimulus_controllers.py`):
-  `lab.js` registers neither `view-menu` nor `remember`; the source names
-  no `lab-view-menu`, `columns-menu` or `data-remember`.
-- [ ] 1.5 Styles (`test_widgets_print.py`, `test_inventory_table.py`):
-  `lab.css` names no `#row-height`, `#heat-switch`, `.lab-view-menu`,
-  `.lab-view-controls`, `.heat-legend`, `.table-only`, `.lab-columns`,
-  `#columns-menu`, `.projected`, `.col-note` or `.col-fill`; one rule
-  makes `.main-table .col-strong` bold; `screen.css`'s `body` is not
-  centred.
+  `lab.js` registers neither `view-menu` nor `remember` and holds no
+  `storage` helper; the source names no `lab-view-menu`, `columns-menu`
+  or `data-remember`. Drop the positive `view-menu` and `columns-menu`
+  assertions, and split `remember` out of
+  `test_remember_and_batch_narrow_both_drivers`, keeping its
+  `batch-narrow` coverage.
+- [ ] 1.5 Styles (`test_widgets_print.py`, `test_inventory_table.py`,
+  `test_shell.py`, and `tests/test_theme_static.py` at the repository
+  root): `lab.css` names no `#row-height`, `#heat-switch`,
+  `.lab-view-menu`, `.lab-view-controls`, `.heat-legend`, `.table-only`,
+  `.lab-columns`, `#columns-menu`, `.projected`, `.col-note`, `.col-fill`
+  or `.category-table td:first-child`; one rule makes
+  `.main-table td.col-strong` bold; the name caps with `text-overflow`
+  sit inside `@media screen`; `screen.css`'s `body` is not centred, and
+  `body.lab-frame` has no `max-width`.
 - [ ] 1.6 Main tables (`test_main_lists.py`): on every list the headers
   and cells of the two columns design decision 5 names carry
-  `col-strong`, and no other column does; planning's `Artikel` cell holds
-  the article number and the name with no line break between them; the
-  task and substance lists' filter controls are inline.
+  `col-strong`, and no other column does; each capped name cell carries
+  `title` with the whole name; planning's `Artikel` cell holds the
+  article number before the name and no `.kv-sub`.
+- [ ] 1.7 Filter bars (`test_task_list.py`, `test_live_tasks_registry.py`,
+  `test_registry_pages.py`): the task and substance lists' controls are
+  inline, and their search fields carry the placeholders of design
+  decision 6.
+- [ ] 1.8 Other lists the bold columns touch: update what
+  `test_inventory_bulk.py`, `test_inventory_categories.py`,
+  `test_inventory_batches.py` and `test_planning_list.py` assert about
+  the cells' markup, where the change alters it.
 
 ## 2. Item and vessel lists
 
@@ -58,21 +77,26 @@
   `body.lab-frame` without the width cap.
 - [ ] 3.4 Task and substance lists: inline filter controls.
 - [ ] 3.5 `lab.js`: drop `RememberController`, `ViewMenuController`, the
-  view-menu closing in `PopoverAnchorController`, and the columns button
-  in `SplitListController`.
-- [ ] 3.6 German catalogue: remove the dead strings and compile.
+  `storage` helper, the view-menu closing in `PopoverAnchorController`,
+  the columns button in `SplitListController`, and their entries in the
+  file's controller list.
+- [ ] 3.6 Templates: `title` with the whole name on every capped name
+  cell; search placeholders on the task and substance lists.
+- [ ] 3.7 German catalogues: remove the dead strings (keeping the item
+  list's `View`), translate the new hint line and the placeholders, and
+  compile.
 
 ## 4. Documents
 
-- [ ] 4.1 Check user documents for the removed controls and the
-  projected mark.
+- [ ] 4.1 `README.md` (via `codex-docs`): the item list's columns, the
+  removed `Spalten` and `Ansicht` menus, the stored choices, and the
+  projected figures. Check `docs/` for the same.
 
 ## 5. Verification
 
-- [ ] 5.1 Run the area tests serially: the files of section 1,
-  `test_inventory_*.py` touched, `test_live_tasks_registry.py`,
-  `test_planning_list.py`, `test_lab_script.py`,
-  `test_stimulus_controllers.py`.
+- [ ] 5.1 Run the area tests serially: every file section 1 names, and
+  `python3 -m pytest tests/test_theme_static.py -q` at the repository
+  root.
 - [ ] 5.2 On the local demo database, screenshot each of the ten lists in
   the table view at 1920×1080 with the sidebar open: no table scrolls
   sideways; the sidebar sits at the left edge on a lab page and a site

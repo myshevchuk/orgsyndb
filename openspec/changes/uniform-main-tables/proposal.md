@@ -56,10 +56,15 @@ None.
 
 ## Impact
 
-- `webapp/inventory/views/items.py`, `vessels.py`; item, vessel, planning,
-  task and substance list templates; `item_page.html`.
+- The views and list templates of all ten main lists
+  (`inventory/views/{items,bulk,notes,categories,batches,vessels}.py`,
+  `planning/views.py`, `tasks/views.py`, `registry/views.py`), and
+  `item_page.html`.
 - `webapp/orgsyndb_web/static/lab.css`, `lab.js`; `site/assets/css/screen.css`.
-- German catalogue: dead strings go.
+- German catalogues: dead strings go; the new hint line and the two
+  search placeholders are translated.
+- `README.md`, which describes the removed controls and the projected
+  mark.
 - Tests of the item table, the script, the vessel list, the consumption
   figures and the shell.
 - Not affected: the sorting and selection contract, the details panes'
