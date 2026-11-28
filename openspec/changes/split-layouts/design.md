@@ -62,7 +62,7 @@ the slots `first` and `second` renders
   or `-columns`). `data-major` names the larger side.
 - Each pane is a grid cell with `min-height: 0`/`min-width: 0`; what
   scrolls is the table box or each widget, never the pane as a whole.
-- Below `55rem` a `columns` split becomes `rows`; a `rows` split lets
+- Below `56.25rem` (900 px, where `body.lab-frame` starts) a `columns` split becomes `rows`; a `rows` split lets
   the page scroll, each pane at its natural height, the table box capped
   at about a third of the window.
 - Splits nest: a pane holds any content, another split included.
@@ -73,45 +73,88 @@ the slots `first` and `second` renders
 The toggle is one button in the list's toolbar beside the view switch,
 `Größere Fläche: Tabelle | Details` (`Larger area: table | details`),
 shown only in the details view. The `split` controller swaps
-`data-major` and writes the cookie `<list>-split` (`first` or `second`,
+`data-major` and writes the list's split cookie (`first` or `second`,
 a year, `SameSite=Lax`, the list's path); `orgsyndb_web.lists` reads it
 (`split_major(request, cookie, default)`) so the page renders the
-remembered ratio without a flash. Defaults: `first` (the table) on every
-list but the delivery list, `second` there.
+remembered ratio without a flash. The cookie's name is the list's view
+cookie with `-view` replaced by `-split`: `item-list-split`,
+`bulk-list-split`, `delivery-list-split`, `intermediate-list-split`,
+`chemical-list-split`, `batch-list-split`, `vessel-list-split`,
+`planning-list-split`, `task-list-split`, `substance-list-split`. Every
+list view already varies on the cookie (`vary_on_cookie`). Defaults:
+`first` (the table) on every list but the delivery list, `second` there.
+The toggle, its cookies and the layouts are interface decisions and stay
+out of the specs (owner, 2026-11-28).
 
 Rejected: one setting for all lists (owner chose per list); a ratio in
 the address (layout is not state worth bookmarking).
 
 ### 2. The master-detail controller
 
-`master-detail` sits on the split and takes values instead of page-wide
+`master-detail` sits on a split and takes values instead of page-wide
 identifiers:
 
 | Value | Outer level | Category lot level |
 |---|---|---|
+| `level` | `outer` | `inner` |
 | `rows` (tbody id) | `item-rows` | `lot-rows` |
 | `pane` (pane id) | `item-detail` | `lot-detail` |
 | `param` | `selected` | `lot` |
-| `field` (hidden-field host) | `filter-selected` | `filter-selected` |
 
-It binds only the rows of its own `tbody` (`#<rows> > tr[data-item]`),
-so the outer level never reacts to lot rows and the reverse. A row click
-(ignoring links, buttons, labels and form controls) or an arrow key in
-its table selects, marks `aria-current`, triggers the row's `hx-get`,
-writes its `param` into the hidden field and into the address with
-`history.replaceState`, and relinks the list's own links
-(`OWN_LINKS`) with that parameter. A new outer selection drops `lot`
-from the address, the field and the links, since the new pane brings
-its own lots. The view radio buttons stay the outer controller's.
+Both levels:
 
-Each level's pane carries `data-item`; after an htmx swap the
-controller re-reads it, as `split-list` does today. Form-dialog refresh
-(`data-refresh`) covers `#lot-rows` and `#lot-detail` too.
+- bind only the rows of their own `tbody` (`#<rows> > tr[data-item]`),
+  so the outer level never reacts to lot rows and the reverse;
+- select on a row click (ignoring links, buttons, labels and form
+  controls) or an arrow key in their table: mark `aria-current`,
+  trigger the row's `hx-get`, write `param` into the hidden field of
+  `#filter-selected` and into the address with `history.replaceState`,
+  and relink the list's own links (`OWN_LINKS`) with it;
+- re-read their pane's `data-item` after an htmx swap or settle, and
+  make their rows focusable again after their `tbody` is morphed (a live
+  update morphs `#item-detail`, and with it `#lot-rows`, in place; the
+  element and its controller stay, the rows are new).
+
+The outer level alone owns what belongs to the page: the view radio
+buttons, `data-scripted`/`data-view`, view transitions, the
+`#stock-menu` dismissal, the ticked `input[name=item]` boxes, and the
+no-script CSS of the view switch, whose selectors take only the outer
+split (`main > … > .split` by a class `split--outer`, never a nested
+one). A new outer selection drops `lot` from the field, the address and
+the links; the substance's pane then brings its first lot, and its
+endpoint's `HX-Replace-Url` names it.
+
+The server keeps `lot` alongside `selected`: `c-filter-bar` takes a
+`lot` and renders it into `#filter-selected`, the category views pass it
+to `Order.headers`/`Order.link` and to the reset and other own links as
+an extra pair, so a live filter or sort swap keeps the lot (and falls
+back to the first lot when the substance changes). The category
+substance and lot endpoints build `HX-Replace-Url` from the same-host
+`HX-Current-URL`'s query with `selected` and `lot` set; they extend
+`orgsyndb_web.lists.htmx_detail_or_redirect` with extra pairs, and
+`inventory.views.common`'s duplicate of that helper (and of
+`list_view`, `pick_selected`) goes, its callers moving to `lists.py`.
+
+`#lot-rows` carries `hx-target="#lot-detail"`, `hx-swap="outerHTML"`,
+`hx-sync="#main:replace"` and `hx-indicator="#lot-detail"`, as
+`#item-rows` does, so `setupLiveListGuards` treats a lot click like an
+outer one.
+
+Form-dialog refresh keeps `data-refresh` on `#item-detail` only: the
+refreshed page is fetched from the current address, which names
+`selected` and `lot`, so `#item-detail` brings the lot back with it.
+`DialogController` restores selection through every `master-detail`
+controller on the page (not `.item-layout`/`split-list`), keeps the
+scroll positions of the table box and of each widget body, and focuses
+`#item-detail-title` or `#lot-detail-title`, whichever pane held the
+opener.
 
 Rejected: keeping fixed identifiers (they collide when nested; this
 reverses the unified-list-tables decision, which predates nesting);
 a server-side layout tree (layout moves out of the templates); a custom
-element (a second component model).
+element (a second component model); naming `lot` only off the first lot
+(a browser sort reorders the lot table, so "first" is ambiguous after a
+reload).
 
 ### 3. Widgets in panes
 
@@ -139,20 +182,26 @@ Figures become key–value rows inside a widget, not tiles. Breakdown:
 | category | — | a nested `columns` split: the lot table; the lot's details (Gefäßdaten, Letzte Buchungen, one column) |
 
 The ui-specialist may adjust the grid where a pane reads better
-otherwise; the specs fix none of it.
+otherwise; the specs fix none of it. Each pane head's `Aktionen` popover
+has an id unique on the page (`item-actions`, `lot-actions`) with its
+own anchor name; `DialogController` hides an open ancestor popover
+before it opens a dialog, and after the save focuses the pane's title
+rather than an opener inside a closed popover.
 
 ### 4. The category lots
 
 - Routes `intermediates/<str:key>/lots/<int:pk>/` and
   `chemicals/<str:key>/lots/<int:pk>/` render the lot partial
-  (`#lot-detail`) through the existing `htmx_detail_or_redirect`,
-  keeping `HX-Current-URL`'s filters and adding `selected` and `lot`
-  (omitted for the first lot).
+  (`#lot-detail`), keeping `HX-Current-URL`'s filters and setting
+  `selected` and `lot` (decision 2), and vary on `HX-Request` and
+  `HX-Current-URL`.
 - The substance pane (`/lab/inventory/<category>/<key>/`) renders the
   lot table and the selected lot (`lot` from the request, else the
   first).
 - The lot table drops `Bemerkung` and the action links; the lot's
-  details reuse the vessel list's details partial content.
+  details reuse the vessel list's details content with their own
+  identifiers (`#lot-detail`, `#lot-detail-title`) so no id repeats on
+  the page.
 - Unknown key, unknown id, or an id of another substance or category
   answers 404.
 
@@ -171,6 +220,8 @@ category pane), and every string only they used.
   table after a click there.
 - **Address noise.** `lot` appears only off the first lot.
 - **Print.** Panes stay off paper, as today.
+- **View transitions.** The `view-transition-name`s on the old layout
+  move to the outer split's panes.
 
 ## Migration Plan
 
