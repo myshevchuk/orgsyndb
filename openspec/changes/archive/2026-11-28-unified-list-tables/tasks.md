@@ -2,7 +2,7 @@
 
 ## 1. Tests (red-first)
 
-- [ ] 1.1 Shared sorting (`web-app` "Main lists", column values): unit
+- [x] 1.1 Shared sorting (`web-app` "Main lists", column values): unit
   tests for the column model in `orgsyndb_web/lists.py`:
   - parsing `sort` / `dir` against a list's columns and default;
   - the header-link toggle;
@@ -14,7 +14,7 @@
     equal values keeping the default order.
 
   Extend `webapp/tests/test_lists_support.py`.
-- [ ] 1.2 Main lists, per list (`web-app` "Main lists" scenarios): for
+- [x] 1.2 Main lists, per list (`web-app` "Main lists" scenarios): for
   each of the ten lists, cover:
   - `table.main-table`, `#item-rows`, and rows with `data-item`,
     `hx-get` to the details endpoint and `hx-trigger="item-select"`;
@@ -31,7 +31,7 @@
   sweep, `test_inventory_batch_details.py`,
   `test_inventory_vessel_details.py`, `test_task_details.py` and
   `test_registry_details.py`.
-- [ ] 1.3 Details endpoints (`end-product-inventory` "Batch details",
+- [x] 1.3 Details endpoints (`end-product-inventory` "Batch details",
   "Vessel details"; `task-tracker` "Task details"; `lab-registry`
   "Substance details"; `production-planning` "Planning list" details):
   cover content, signed-in links, the HTMX fragment, the redirect
@@ -41,7 +41,7 @@
   populated `#item-detail`, and `data-refresh` on the count,
   `#item-rows` and `#item-detail` of every main list, with a dialog save
   from the vessel list's details refreshing them.
-- [ ] 1.4 Live lists (`end-product-inventory` "Live inventory lists",
+- [x] 1.4 Live lists (`end-product-inventory` "Live inventory lists",
   `task-tracker` "Live task list", `lab-registry` "Live substance
   list", the planning list's filter form): update the existing
   assertions in `test_inventory_live_lists.py` and
@@ -54,7 +54,7 @@
   Update `test_inventory_table.py`'s default-filter test (no hidden
   `sort=category`) and the item list's order-summary test, whose ties
   stay article number, then container.
-- [ ] 1.5 Planning list (`production-planning` "Planning list"): rewrite
+- [x] 1.5 Planning list (`production-planning` "Planning list"): rewrite
   `test_planning_list.py` and `test_planning_inspector.py` for:
   - server-side `show` and `all`;
   - the count;
@@ -71,7 +71,7 @@
   their checks on planning decisions. Update
   `test_inventory_consumption_widget.py`, which finds the pane's
   consumption table by `detail-table`, keeping its quarter-link checks.
-- [ ] 1.6 Client-sortable auxiliary tables (`web-app` "Widgets", "Widget
+- [x] 1.6 Client-sortable auxiliary tables (`web-app` "Widgets", "Widget
   and pane tables sort in the browser"): cover `data-sortable`, unique
   `id`s and ISO `data-sort` keys on the item page, the substance page,
   the overview and every list's details pane, and their absence on
@@ -79,13 +79,13 @@
   Use `test_widgets_item_page.py`, `test_widgets_substance_page.py`,
   `test_widgets_overview.py`, `test_widgets_history.py` and the details
   test files.
-- [ ] 1.7 Table classes (`web-app` "Main lists", "Two table classes"):
+- [x] 1.7 Table classes (`web-app` "Main lists", "Two table classes"):
   a sweep over the pages the scenario names, asserting every `table`
   carries exactly one of `main-table` and `aux-table`, with an access
   token created and records chosen so that every conditional table
   renders. Update the CSS-reading tests that name the removed classes
   (`test_inventory_table.py`'s width test, `test_widgets_print.py`).
-- [ ] 1.8 Script (`test_lab_script.py`, `test_stimulus_controllers.py`):
+- [x] 1.8 Script (`test_lab_script.py`, `test_stimulus_controllers.py`):
   - `split-list` has no local mode;
   - `planFilterShows` is no longer exported;
   - htmx-mode selection works on `.main-table tbody tr[data-item]`.
@@ -94,34 +94,34 @@
 
 ## 2. Shared sorting
 
-- [ ] 2.1 Add the column model, `Order`, the header links, the canonical
+- [x] 2.1 Add the column model, `Order`, the header links, the canonical
   pairs and `sort_value` to `webapp/orgsyndb_web/lists.py`.
-- [ ] 2.2 Move the item list (`inventory/views/items.py`) onto it, keeping
+- [x] 2.2 Move the item list (`inventory/views/items.py`) onto it, keeping
   its columns, its default `category` and its order text, and dropping
   the default order from its canonical URL.
-- [ ] 2.3 Render the header row of every main table from the column model
+- [x] 2.3 Render the header row of every main table from the column model
   with `c-sort-th`, with live `hx-get` attributes like `#item-head`.
 
 ## 3. Lists
 
-- [ ] 3.1 Bulk, delivery, intermediate and commercial chemical lists:
+- [x] 3.1 Bulk, delivery, intermediate and commercial chemical lists:
   columns, sorting and canonical URLs (`inventory/views/{bulk,notes,
   categories}.py` and their templates).
-- [ ] 3.0 For every list that becomes a split list: `vary_on_cookie` and
+- [x] 3.0 For every list that becomes a split list: `vary_on_cookie` and
   `body.lab-frame`. For all ten lists: `#item-head`, `data-refresh` on
   the count, `#item-rows` and `#item-detail` (bulk and delivery lists
   included), `data-item` on every populated `#item-detail`, and the
   hidden `sort` / `dir` fields present only off the default order.
-- [ ] 3.2 Batch and vessel lists: split layout, view switch and cookies,
+- [x] 3.2 Batch and vessel lists: split layout, view switch and cookies,
   sorting, details endpoints and templates, and URL routes
   (`inventory/views/{batches,vessels}.py`, `inventory/urls.py`).
-- [ ] 3.3 Task list: split layout, sorting, the details endpoint
+- [x] 3.3 Task list: split layout, sorting, the details endpoint
   (GET only) routed before `<number>/<action>/`, and templates (`tasks/views.py`,
   `tasks/urls.py`, `tasks/templates/tasks/`).
-- [ ] 3.4 Substance list: split layout, sorting, the details endpoint and
+- [x] 3.4 Substance list: split layout, sorting, the details endpoint and
   templates (`registry/views.py`, `registry/urls.py`,
   `registry/templates/registry/`).
-- [ ] 3.5 Planning list: the filter form (`show`, `all`), sorting, the
+- [x] 3.5 Planning list: the filter form (`show`, `all`), sorting, the
   split layout, the details endpoint on `<path:number>` keeping `all`
   and `show`, the empty-list row, and templates, and the removal of
   the list widget, the inspector blocks and the filter buttons
@@ -130,16 +130,16 @@
 
 ## 4. Tables, styles and script
 
-- [ ] 4.1 Give every table under `webapp/*/templates/` exactly one of
+- [x] 4.1 Give every table under `webapp/*/templates/` exactly one of
   `main-table` and `aux-table`, and `kv-table` as the key–value
   modifier.
-- [ ] 4.2 Mark the client-sortable auxiliary tables with `data-sortable`,
+- [x] 4.2 Mark the client-sortable auxiliary tables with `data-sortable`,
   `data-controller="sortable-table"`, unique `id`s and `data-sort` keys
   (design decisions 7 and 8). Key the compound cells on their value: the
   overview's priority, the substance page's stock, entry and yield, the
   delivery list's reversed counts, and the planning pane's stock and
   runway.
-- [ ] 4.3 `lab.css`: define `.main-table` and `.aux-table` with a single
+- [x] 4.3 `lab.css`: define `.main-table` and `.aux-table` with a single
   sort-indicator style. Remove the rules of `inventory-table`,
   `item-table`, `task-table`, `widget-table`, `detail-table`,
   `planning-table`, `planning-*` and `#movements`, and move the lab-only
@@ -147,17 +147,17 @@
   `site/assets/css/screen.css`. Give `.main-table` its natural width
   with a `col-fill` modifier. Update the inline column-hiding `<style>`
   of `item_list.html`.
-- [ ] 4.4 `lab.js`: remove `split-list`'s local mode, `planFilterShows`
+- [x] 4.4 `lab.js`: remove `split-list`'s local mode, `planFilterShows`
   and any helper only that mode used (`planStep` stays, `stepIndex` uses
   it). Widen the row selector to
   `.main-table`, and update `OWN_LINKS`, the arrow-key guard, the
   `batch-rows` / `vessel-rows` guards and the row-click guard (design
   decision 3), and the header comment.
-- [ ] 4.5 German catalogues: translate the new strings and compile.
+- [x] 4.5 German catalogues: translate the new strings and compile.
 
 ## 5. Verification
 
-- [ ] 5.1 Run the area tests serially (`test_lists_support.py`,
+- [x] 5.1 Run the area tests serially (`test_lists_support.py`,
   `test_main_lists.py`, the details files, `test_inventory_*` lists and
   live lists, `test_live_tasks_registry.py`, `test_task_*`,
   `test_registry_*`, `test_planning_list.py`,
