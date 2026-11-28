@@ -256,6 +256,7 @@ class SplitTests(MainListCase):
             self, spec: MainList) -> None:
         _, major = spec.layout
         flipped = "second" if major == "first" else "first"
+        self.client.cookies.clear()
         for name, cookie in SPLIT_COOKIES.items():
             if name != spec.name:
                 self.client.cookies[cookie] = flipped
