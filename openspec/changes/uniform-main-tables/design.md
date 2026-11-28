@@ -161,8 +161,12 @@ decides how means are computed.
 - Widths: name columns are capped on screen (`max-width` with
   `overflow: hidden` and `text-overflow: ellipsis`, inside `@media
   screen`, so paper keeps whole names); the templates give each capped
-  cell the whole name in `title`. Other columns keep their natural
-  width. The ui-specialist sets the cap so that each list fits. The
+  cell the whole name in `title`. In the table view every main table
+  fills the width of its box (owner, 2026-11-28): 1650 px is the
+  narrowest window at which no table scrolls sideways, and wider windows
+  stretch the tables; narrower windows may scroll. The details view keeps
+  its grid sizing until the next change. On paper every cell but a
+  number's may wrap (print-layout "Wide tables"). The ui-specialist sets the cap so that each list fits. The
   vessel list's names are not capped (owner); `Ort` is not capped
   either, as German place names run long. Whether the caps suffice is
   unverified until the screenshots of tasks 5.2. Measured on

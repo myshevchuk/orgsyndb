@@ -98,6 +98,12 @@ class PrintRuleTests(SimpleTestCase):
         shown = [d for d in found if d.get("display", "none") != "none"]
         self.assertTrue(shown, f"no rule shows the buttons: {found}")
 
+    def test_main_table_text_cells_wrap_on_paper(self) -> None:
+        """print-layout "Wide tables": only number cells keep one line."""
+        found = self.declarations(".main-table td:not(.num):not(.number)")
+        self.assertTrue(any(d.get("white-space") == "normal"
+                            for d in found), found)
+
 
 class ScreenOnlyLayoutTests(SimpleTestCase):
     """A layout grid for the screen leaves the print layout alone."""

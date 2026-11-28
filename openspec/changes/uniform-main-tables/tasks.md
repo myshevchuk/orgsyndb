@@ -132,5 +132,5 @@
   root.
 - [ ] 5.2 On the local demo database, screenshot each of the ten lists in
   the table view at 1650×1050 with the sidebar open: no table scrolls
-  sideways; the sidebar sits at the left edge on a lab page and a site
+  sideways and every table fills the width, as it does at 1920×1080; the sidebar sits at the left edge on a lab page and a site
   page.

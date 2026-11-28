@@ -1,6 +1,7 @@
 """Tests for shared list helpers and django-cotton component integration."""
 
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qsl, urlsplit
@@ -464,3 +465,21 @@ class SortValueTests(SimpleTestCase):
                 self.assertEqual(firsts, [("a", 2), ("a", 4)])
                 seconds = [row for row in found if row[0] == "b"]
                 self.assertEqual(seconds, [("b", 1), ("b", 3)])
+
+
+class PairsSortKeyTests(SimpleTestCase):
+
+    def test_a_shown_zero_is_an_amount(self) -> None:
+        """A remainder shown as ``0 g`` sorts before ``1 mg``, not last."""
+        rows = [[(Decimal("1"), "mg")], [], [(Decimal("0"), "g")]]
+        self.assertEqual(sort_rows(rows, lists.pairs_sort_key),
+                         [[(Decimal("0"), "g")], [(Decimal("1"), "mg")], []])
+
+    def test_a_zero_amount_of_substance_follows_the_masses(self) -> None:
+        rows = [[(Decimal("0"), "µmol")], [(Decimal("5"), "mg")]]
+        self.assertEqual(sort_rows(rows, lists.pairs_sort_key),
+                         [[(Decimal("5"), "mg")], [(Decimal("0"), "µmol")]])
+
+    def test_no_pairs_have_no_key(self) -> None:
+        self.assertIsNone(lists.pairs_sort_key([]))
+

@@ -1334,8 +1334,8 @@ class StylesheetTests(SimpleTestCase):
             and ":not([data-scripted])" in part for part, _ in shown),
             shown)
 
-    def test_the_table_takes_its_natural_width(self) -> None:
-        """The table does not stretch to its box."""
+    def test_the_table_fills_its_box(self) -> None:
+        """The table stretches to the width of its box."""
         ours = (".main-table", "table.main-table")
         widths = [(start, part.strip(), width.strip())
                   for start, selector, body in located(self.text)
@@ -1345,7 +1345,7 @@ class StylesheetTests(SimpleTestCase):
                   if part.strip() in ours]
         self.assertTrue(widths, "no rule sets the width of .main-table")
         start, part, width = widths[-1]
-        self.assertEqual(width, "auto")
+        self.assertEqual(width, "100%")
 
     def test_the_marked_row_is_marked_in_both_views(self) -> None:
         marks = [(part.strip(), body)
