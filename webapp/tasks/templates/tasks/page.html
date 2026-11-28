@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{{ task.number }}{% endblock %}
 {% block main %}
-{% translate "Tasks" as back %}{% include "orgsyndb_web/back.html" with url="/lab/tasks/" text=back %}
+{% translate "Tasks" as back %}{% include "orgsyndb_web/back.html" with url="/lab/tasks/" key=task.number query=task.active|yesno:',state=all' text=back %}
 <h1>{{ task.number }} · {% substance task.substance %}</h1>
 <p class="lab-state">{% include "tasks/state.html" %}</p>
 {% if user.is_authenticated %}<div class="lab-actions">

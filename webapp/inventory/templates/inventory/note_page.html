@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{% translate "Delivery note" %} {{ note }}{% endblock %}
 {% block main %}
-{% translate "End products" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/deliveries/" text=back %}
+{% translate "End products" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/deliveries/" key=note.pk text=back %}
 <h1>{% translate "Delivery note" %} {{ note }}</h1>
 <p class="lab-state">{% include "inventory/note_marks.html" %}</p>
 {% if user.is_authenticated %}<div class="lab-actions">

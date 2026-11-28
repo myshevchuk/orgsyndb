@@ -681,44 +681,6 @@
     }
   }
 
-  // Swaps a split's golden-ratio major side and persists it per list.
-  class SplitController extends Stimulus.Controller {
-    static values = { cookie: String };
-
-    toggle(event) {
-      if (!plain(event) || !(event.target instanceof Element)) return;
-      const button = event.target.closest("button[data-lab-action]");
-      const action = button && button.getAttribute("data-lab-action");
-      if (!action || !action.split(/\s+/).some(
-        (descriptor) => descriptor.endsWith("->split#toggle")
-      )) return;
-      const list = button.closest("main, body");
-      if (!list || list.querySelector(".split--outer") !== this.element) {
-        return;
-      }
-
-      const next = this.element.dataset.major === "second"
-        ? "first" : "second";
-      this.element.dataset.major = next;
-      button.setAttribute("aria-pressed", String(next === "second"));
-      if (this.hasCookieValue && this.cookieValue) {
-        document.cookie = `${this.cookieValue}=${next};`
-          + ` path=${location.pathname}; max-age=31536000;`
-          + " SameSite=Lax";
-      }
-    }
-
-    connect() {
-      // The toolbar is outside the split's Stimulus scope.
-      this._onDocClick = this.toggle.bind(this);
-      document.addEventListener("click", this._onDocClick);
-    }
-
-    disconnect() {
-      document.removeEventListener("click", this._onDocClick);
-    }
-  }
-
   // Nestable master-detail controller binding one tbody's rows to one
   // details pane and one URL parameter. The outer level also owns the
   // page's view switch, stock-menu dismissal, and ticked item boxes.
@@ -798,7 +760,18 @@
 
         this._onRadioChange = (event) => {
           const radio = event.currentTarget;
-          if (!radio.checked || this._wanted === radio.value) return;
+          if (!radio.checked) return;
+          const major = radio.dataset.major || "";
+          if (major && major !== this.element.dataset.major) {
+            this.element.dataset.major = major;
+            const split = this.element.dataset.splitCookie;
+            if (split) {
+              document.cookie = `${split}=${major};`
+                + ` path=${location.pathname}; max-age=31536000;`
+                + " SameSite=Lax";
+            }
+          }
+          if (this._wanted === radio.value) return;
           this._wanted = radio.value;
           const cookie = this.element.dataset.cookie || "item-list-view";
           document.cookie = `${cookie}=${this._wanted};`
@@ -1248,6 +1221,24 @@
     }
   }
 
+  // A back link returns through history when this page was opened from
+  // a page of the list it leads to, so the list keeps its state.
+  document.addEventListener("click", (event) => {
+    if (!plain(event) || !(event.target instanceof Element)) return;
+    const link = event.target.closest("a[data-back]");
+    if (!link || history.length < 2 || !document.referrer) return;
+    let from;
+    try {
+      from = new URL(document.referrer);
+    } catch {
+      return;
+    }
+    if (from.origin !== location.origin
+        || from.pathname !== new URL(link.href).pathname) return;
+    event.preventDefault();
+    history.back();
+  });
+
   const schema = {
     ...Stimulus.defaultSchema,
     actionAttribute: "data-lab-action",
@@ -1258,6 +1249,5 @@
   application.register("batch-narrow", BatchNarrowController);
   application.register("sortable-table", SortableTableController);
   application.register("master-detail", MasterDetailController);
-  application.register("split", SplitController);
   application.register("dialog", DialogController);
 })();

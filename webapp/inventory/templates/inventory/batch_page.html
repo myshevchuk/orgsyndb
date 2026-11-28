@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{{ batch }}{% endblock %}
 {% block main %}
-{% translate "Batches" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/batches/" text=back %}
+{% translate "Batches" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/batches/" key=batch.pk text=back %}
 <h1>{% translate "Batch" %} {{ batch }}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/inventory/batches/{{ batch.pk }}/edit/">{% translate "Edit" %}</a>

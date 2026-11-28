@@ -669,8 +669,11 @@ msgstr "<strong>Details</strong> zeigt die Details des gewählten Artikels mit d
 msgid "not recorded"
 msgstr "nicht hinterlegt"
 
-msgid "Larger area"
-msgstr "Größere Fläche"
+msgid "Details, larger table"
+msgstr "Details, Tabelle größer"
+
+msgid "Details, larger details"
+msgstr "Details, Details größer"
 
 msgid "Stock and location"
 msgstr "Bestand & Lagerort"
