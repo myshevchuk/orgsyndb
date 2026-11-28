@@ -346,12 +346,13 @@ class SortTests(TableCase):
             "Zeta 10 µmol"])
 
     def test_text_regardless_of_case(self) -> None:
-        self.item("T-1", name="beta", note="Zwei")
-        self.item("T-2", name="Alpha", note="eins")
+        self.item("T-1", name="beta", category="Zwei")
+        self.item("T-2", name="Alpha", category="eins")
         self.item("T-3", name="Gamma")
         self.assertEqual(self.articles("?sort=name"), ["T-2", "T-1", "T-3"])
-        self.assertEqual(self.articles("?sort=note"), ["T-2", "T-1", "T-3"])
-        self.assertEqual(self.articles("?sort=note&dir=desc"),
+        self.assertEqual(self.articles("?sort=category"),
+                         ["T-2", "T-1", "T-3"])
+        self.assertEqual(self.articles("?sort=category&dir=desc"),
                          ["T-1", "T-2", "T-3"])
 
     def test_locations_regardless_of_case_and_empty_last(self) -> None:
