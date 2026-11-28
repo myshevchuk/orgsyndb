@@ -195,9 +195,14 @@ rather than an opener inside a closed popover.
   (`#lot-detail`), keeping `HX-Current-URL`'s filters and setting
   `selected` and `lot` (decision 2), and vary on `HX-Request` and
   `HX-Current-URL`.
-- The substance pane (`/lab/inventory/<category>/<key>/`) renders the
-  lot table and the selected lot (`lot` from the request, else the
-  first).
+- The substance endpoint (`/lab/inventory/<category>/<key>/`) answers
+  an outer selection: it renders the lot table and its first lot,
+  ignoring any `lot`, and names no lot when the filters admit none of
+  the substance's vessels. The list page itself resolves `lot` from its
+  query among the lot table's vessels, else the first.
+- The lot endpoint applies the filters of a same-host `HX-Current-URL`,
+  else the request's query, and answers 404 for a vessel they do not
+  admit, so the address it returns always reloads to the same lot.
 - The lot table drops `Bemerkung` and the action links; the lot's
   details reuse the vessel list's details content with their own
   identifiers (`#lot-detail`, `#lot-detail-title`) so no id repeats on
@@ -218,7 +223,8 @@ category pane), and every string only they used.
 - **Two levels of keyboard selection.** Arrow keys act on the table that
   holds focus; the outer table keeps focus after a click in it, the lot
   table after a click there.
-- **Address noise.** `lot` appears only off the first lot.
+- **Sort after a save.** A dialog refresh morphs the lot table back to
+  its server order, as it does every browser-sorted pane table today.
 - **Print.** Panes stay off paper, as today.
 - **View transitions.** The `view-transition-name`s on the old layout
   move to the outer split's panes.

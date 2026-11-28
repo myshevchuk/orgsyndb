@@ -48,10 +48,12 @@ None.
 ### Modified Capabilities
 
 - `web-app`: "Main lists" drops "beside", states that details show their
-  data in widgets, and gives lot tables the main-table look.
+  data in widgets, and gives lot tables the main-table look; "Widgets"
+  sorts lot tables in the browser; "Live lists" lets a nested level's
+  endpoint answer with its own pane and parameter.
 - `end-product-inventory`: "Lists by substance" gains the lot table, the
   lot selection and its endpoint; "Live inventory lists" adds `lot` to
-  the category lists' addresses.
+  the category lists' addresses; "Bulk list" drops "beside".
 
 ## Impact
 

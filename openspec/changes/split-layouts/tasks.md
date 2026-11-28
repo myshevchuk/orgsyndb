@@ -30,7 +30,8 @@
   `test_registry_details.py`, `test_planning_inspector.py`, and the bulk
   and delivery panes in `test_inventory_bulk.py` and
   `test_inventory_lists.py`): every `#item-detail` with a record holds a
-  pane head with an `h2` and the record's page link, and its data in
+  pane head with an `h2` and the record's page link (for a planning row,
+  its substance's page), and its data in
   `.widget` elements with `h3` headings; existing content assertions keep
   passing against the widgets. Update the helpers and tests that read
   the old pane markup: `widget_support.py` (`title_of()` reads only
@@ -43,14 +44,17 @@
   `test_inventory_live_lists.py`, `test_inventory_dialogs.py`): the
   scenarios "Containers of the selected substance", "Booking in a
   dialog", "One bottle with its movements", "Selecting a lot", "A lot of
-  another substance", "A new substance brings its first lot"; the lot
+  another substance", "A lot the filters hide", "The selected lot
+  opened", "A new substance brings its first lot"; the lot
   table's columns, `main-table` class, `data-sortable` and its `#lot-rows`
   attributes (`hx-target`, `hx-sync="#main:replace"`, `hx-indicator`);
-  `data-refresh` on `#item-detail` only; the address, `HX-Push-Url`,
-  `#filter-selected`, the header and reset links all naming the resolved
-  `lot`; the lot endpoint's `Vary`; unique ids (`#lot-detail-title`,
+  within `#item-detail` no element but the pane itself carries
+  `data-refresh`; the address, `HX-Push-Url`, `#filter-selected` and the
+  sort header links all naming the resolved `lot`; the lot endpoint's `Vary`; unique ids (`#lot-detail-title`,
   `lot-actions`); no single-vessel movements block. Update the "Live
-  inventory lists" scenarios for the category lists' `lot`.
+  inventory lists" scenarios for the category lists' `lot`, and the
+  web-app "Live lists" detail-endpoint scenario (`test_main_lists.py`,
+  `main_lists_support.py`) for a nested level's pane.
 - [ ] 1.5 Main lists and Widgets (`test_main_lists.py` with
   `main_lists_support.py`, whose `main_table()` expects one main table
   and `unsorted_reasons()` rejects non-auxiliary pane tables): the "Two
@@ -99,7 +103,9 @@
 
 ## 6. Verification
 
-- [ ] 6.1 Area tests serially: every file section 1 names.
+- [ ] 6.1 Area tests serially: every file section 1 names, and
+  `test_demo_records.py`, which reads the planning pane through
+  `widget_support.py`.
 - [ ] 6.2 On the local demo database, screenshot each list in the
   details view at 1650×1050 and 1920×1080, both ratios, and the category
   lists with a second lot selected; check keyboard selection on both
