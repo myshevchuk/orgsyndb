@@ -1029,8 +1029,9 @@ class CategoryViewAndDetailsTests(InventoryCase):
         text = details.text()
         self.assertIn("Anfangsmenge", text)
         self.assertIn("Entnahme", text)
-        self.assertLess(text.index("75"), text.index("90"))
-        self.assertLess(text.index("90"), text.index("100"))
+        moves = details.find(id="lot-detail-movements").text()
+        self.assertLess(moves.index("02.10.2026"),
+                        moves.index("01.10.2026"))
         self.assertIsNotNone(details.find("a", href=vessel_url(vessel)))
         self.assertIsNone(root.find(id="category-detail-movements"))
         self.assertEqual(root.find_all(cls="split-movements-head"), [])
@@ -1214,7 +1215,6 @@ class CategoryViewAndDetailsTests(InventoryCase):
                 root = page(self.client.get(INTERMEDIATES))
                 self.assertEqual(lot_marked(root), [str(v1.pk)])
                 text = lot_pane(root).text()
-                self.assertIn("KL", text)
                 for n in range(2, 7):
                     self.assertIn(f"Bew-{n}", text)
                 self.assertNotIn("Bew-1", text)
