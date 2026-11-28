@@ -36,7 +36,8 @@ lose the text that governs the removed controls and gain none.
   rule for bold text: the column naming the record and one column the
   design names per list. Column widths are set so that each table fits
   a window 1650 px wide with the sidebar open; long names are cut with
-  an ellipsis and shown whole in a tooltip.
+  an ellipsis and shown whole in a tooltip, except on the vessel list,
+  whose names are not cut.
 - The sidebar sits at the window's left edge on every page, the site's
   and the lab's alike, and the main lists' pages use the full width to
   the right of it. The task and substance lists' filter bars use the
@@ -75,5 +76,6 @@ None.
   mark.
 - Tests of the item table, the script, the vessel list, the consumption
   figures and the shell.
-- Not affected: the sorting and selection contract, the details panes'
-  content, the stacked split layout (next change).
+- Not affected: the sorting and selection contract, the stacked split
+  layout (next change). The item details gain the bulk's fill count;
+  other panes' content stays.

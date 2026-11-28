@@ -41,8 +41,8 @@ Non-goals:
 
 - the stacked split and widget panes (next change);
 - a requirement on widths or row heights (owner: interface decisions);
-- changing what any column holds or how it sorts, beyond removing the two
-  note columns.
+- changing what any column holds or how it sorts, beyond the removals and
+  shortenings of decision 1 and the owner's amendment.
 
 ## Decisions
 
@@ -131,8 +131,8 @@ decides how means are computed.
 
 - Row height: the compact one, `1.875rem` at `0.8125rem`, for all ten
   lists; no list overrides it. A cell of one value stays on one line;
-  cells that list several values (delivery contents, planning tasks and
-  actions) may grow. Planning's `Artikel` cell puts the article number
+  cells that list several values (planning tasks and actions) may
+  grow. Planning's `Artikel` cell puts the article number
   before the name on one line, as the bulk list does, without the
   `kv-sub` block. The intermediate and chemical lists' rule
   `.category-table td:first-child { white-space: normal; min-width:

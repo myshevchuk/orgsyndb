@@ -138,7 +138,7 @@ The mean per year is the sum of the consumption of the complete calendar years b
 
 #### Scenario: Vessels by kind
 - **WHEN** the database holds an open flask of a made batch of `cinnamic-acid`, an open vessel of a made batch of `acetophenone`, which has no article, and one of a batch of `acetophenone` bought from `Sigma`, and a test client requests the vessel list, and then with `kind=commercial`
-- **THEN** the first lists the three with the kinds `Kolben`, `Zwischenprodukt` and `Handelschemikalie`, the first with `CH-0012` and the others with an empty article number, the last with `gekauft · Sigma`; the second lists the bought vessel alone
+- **THEN** the first lists the three with the kinds `Kolben`, `Zwischenprodukt` and `Handelschemikalie`, the last with the source `Sigma`; the second lists the bought vessel alone
 
 ### Requirement: Filling from bulk
 Filling an item SHALL name an open vessel of its substance and the amount taken from it, in the vessel's unit; a filling without a vessel is refused. The proposed amount is the count times the item's size, converted into the vessel's base unit and rounded half up to six places, shown in the vessel's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and vessel entered. When the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's substance in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the vessel's filling are stored in one transaction. An amount above the vessel's, or one that rounds to zero, refuses both.
@@ -159,11 +159,11 @@ An item's bulk is the amount in the open vessels of its substance, flasks among 
 
 #### Scenario: Containers from bulk
 - **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has one open vessel of `50` mg
-- **THEN** it shows `50 mg` and 33 containers
+- **THEN** its bulk is `50 mg` and would fill 33 containers
 
 #### Scenario: Vessels are not pooled
 - **WHEN** an item of 10 mg has two open vessels of `6` mg
-- **THEN** it shows 0 containers from bulk
+- **THEN** its bulk would fill 0 containers
 
 ### Requirement: Delivery list
 `/lab/inventory/deliveries/` SHALL list the delivery notes, under the heading `Endprodukte` (End product layers), newest date first, then newest booking first, each with its number linking to its page, date, recipient and number of lines, the mark `nachgetragen` (`entered later`) on a historical note and `storniert` (`reversed`) on a reversed one; a current note shows `storniert` when all its lines are reversed and `teilweise storniert` (`partly reversed`) when some are. GET parameters filter it and keep their values: `q`, text found regardless of case in the number or recipient, and `item`, an item's id. The list shows its notes in the views `Tabelle` and `Details`, remembered in the cookie `delivery-list-view`, with one note selected by `selected=<id>`, as the item list does with its items: the details view shows the selected note as its page shows it, with its marks, lines and a link to its page. `/lab/inventory/deliveries/<id>/` shows one note with its lines, each with the article number, name, size, batch, linking to its page, compartment, box and count, their movements and the change history, and an unknown id answers 404. A signed-in user sees a link `Neuer Lieferschein` (`New delivery note`).

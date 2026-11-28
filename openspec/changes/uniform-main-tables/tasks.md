@@ -62,13 +62,22 @@
   by amount; the vessel list has no `Artikelnr.` or `Angebrochen` column
   and its `Herkunft` reads the task number or the supplier without
   `gekauft`/`hergestellt`; the vessel details still show the opening
-  date; the delivery list's table has no lines column and its details
-  show the lines; the two moved "Main lists" scenarios on the commercial
-  chemical list. Files: `test_inventory_lists.py`,
-  `test_inventory_table.py`, `test_inventory_bulk.py` (where it covers
-  the item list's bulk), `test_inventory_vessel_details.py`,
-  `test_main_lists.py` with `main_lists_support.py`, and the delivery
-  list's tests (grep `deliveries/`).
+  date; the delivery list's table has no `contents` column, keeps its
+  `lines` count and its reversal marks, and its details show the lines
+  with their batches; the two moved "Main lists" scenarios on the
+  commercial chemical list. Files:
+  - item bulk: `test_inventory_numbers.py` (its fill counts read from
+    the item table move to the selected item's details; the item page
+    keeps amount and count), `test_inventory_table.py` (a `sort=bulk`
+    fixture whose amount order differs from its fill-count order, for
+    example two items of different sizes);
+  - vessels: `test_inventory_lists.py`, `test_inventory_vessel_forms.py`
+    (its `Angebrochen` header and cells move to the vessel details or the
+    vessel page), `test_inventory_vessel_details.py`, `test_main_lists.py`
+    with `main_lists_support.py`;
+  - deliveries: `test_inventory_lists.py`, `test_inventory_stock_pages.py`
+    (batch numbers of made, bought, multi-batch and historical lines move
+    from the row to the selected note's details).
 
 ## 2. Item and vessel lists
 
@@ -84,7 +93,9 @@
 - [ ] 2.5 Item list: bulk cell by unit only, sorted as an amount; the
   pane shows the container count.
 - [ ] 2.6 Vessel list: drop `article` and `opened`; `Herkunft` with the
-  task or the supplier only; names uncapped.
+  task or the supplier only, in its cell and its sort value, without
+  changing the batch and bulk lists' shared source template and helper;
+  names uncapped.
 - [ ] 2.7 Delivery list: drop the `contents` column.
 
 ## 3. Main-table look and shell
@@ -110,7 +121,9 @@
 
 - [ ] 4.1 `README.md` (via `codex-docs`): the item list's columns, the
   removed `Spalten` and `Ansicht` menus, the stored choices, and the
-  projected figures. Check `docs/` for the same.
+  projected figures; and, from the amendment, the item list's bulk cell
+  and its sort, the delivery list's rows without lines, and the vessel
+  list without `Angebrochen`. Check `docs/` for the same.
 
 ## 5. Verification
 
