@@ -12,7 +12,8 @@ from . import Element, field_value, make_task, page, task_form_data
 from .collection_support import accept
 from .inventory_support import (VESSELS, TODAY, has_number,
                                 item_url, num)
-from .main_lists_support import (head_of, hidden_fields, query_of, rows_of)
+from .main_lists_support import (head_of, hidden_fields, query_of, rows_of,
+                                 strong_columns)
 from .planning_support import (COLUMNS_DE, COLUMNS_EN, HTMX, PARAMETERS_TITLES,
                                PLAN, SHOW_DE, SHOW_EN, SHOW_VALUES, WINDOW,
                                PlanningCase, detail_url, has_date, has_word,
@@ -512,6 +513,29 @@ class ArticleCellTests(ListCase):
         link = self.link_of(cell, "Probe Eins")
         self.assertEqual(link.get("href"), "/lab/registry/substances/nv-1/")
         self.assertTrue(has_word(cell.text(), "NV-1"), cell.text())
+
+    def test_the_number_comes_first_on_one_line(self) -> None:
+        self.planned_item("NV-1", quantity=10, name="Probe Eins")
+        cell = self.articles()["NV-1"]["Artikel"]
+        self.assertEqual([e.tag for e in cell.walk()
+                          if "kv-sub" in e.classes], [])
+        self.assertEqual([e.tag for e in cell.walk()
+                          if e.tag in ("br", "div", "p", "ul", "ol")], [])
+        self.assertTrue(cell.text().startswith("NV-1"), cell.text())
+        self.assertLess(cell.text().index("NV-1"),
+                        cell.text().index("Probe Eins"))
+
+    def test_the_cell_shows_the_whole_name_in_its_title(self) -> None:
+        self.planned_item("NV-1", quantity=10, name="Probe Eins")
+        cell = self.articles()["NV-1"]["Artikel"]
+        self.assertIn("Probe Eins", cell.get("title") or "")
+
+    def test_the_article_and_the_latest_start_are_strong(self) -> None:
+        self.planned_item("NV-1", quantity=10, name="Probe Eins")
+        root = self.get(PLAN)
+        self.assertEqual(
+            strong_columns(root),
+            (["Artikel", "Spätester Start"], ["Artikel", "Spätester Start"]))
 
     def test_every_link_of_the_cell_leads_to_the_substance(self) -> None:
         self.planned_item("NV-1", quantity=10, name="Probe Eins")

@@ -45,10 +45,10 @@ FORM_NAMES = ("edit", "fill", "correct", "consumption", "reverse")
 DIALOG_LINKS = ("Abfüllen", "Bestand korrigieren", "Verbrauch nachtragen",
                 "Bearbeiten")
 # Controls that a refresh of the list must not replace: the search the
-# user typed in, the view controls and the field that names the
-# selected item.
+# user typed in, the view switch and the field that names the selected
+# item.
 KEPT = ({"name": "q"}, {"id": "view-table"}, {"id": "view-details"},
-        {"id": "row-height"}, {"id": "heat-switch"}, {"name": "selected"})
+        {"name": "selected"})
 
 
 def correction(**over: str) -> dict[str, str]:

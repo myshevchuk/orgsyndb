@@ -30,8 +30,6 @@ EXPECTED_CONTROLLERS = [
     "sortable-table",
     "dialog",
     "popover-anchor",
-    "view-menu",
-    "remember",
     "batch-narrow",
 ]
 
@@ -1147,7 +1145,7 @@ class AnchorPositioningCSSTests(SimpleTestCase):
             r"position-try-fallbacks:[^;]*flip-block[^;]*"
             r"--popover-below-inset[^;]*--popover-above-inset[^;]*"
             r"--popover-fit")
-        for popover_id in ("#stock-menu", "#more-filters", "#columns-menu"):
+        for popover_id in ("#stock-menu", "#more-filters"):
             with self.subTest(popover=popover_id):
                 self.assertIn(popover_id, css)
                 self.assertRegex(
@@ -1165,7 +1163,7 @@ class AnchorPositioningCSSTests(SimpleTestCase):
 class StimulusControllerTests(SimpleTestCase):
     """Unit and lifecycle checks for Stimulus controllers in lab.js."""
 
-    def test_custom_schema_and_all_seven_controllers_registered(self) -> None:
+    def test_custom_schema_and_all_five_controllers_registered(self) -> None:
         result = run_node_test(r"""
 const h = createHarness({
   bodyHtml: `
@@ -1197,15 +1195,11 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["registered"], sorted(EXPECTED_CONTROLLERS))
         self.assertEqual(result["hits"], ["probe-lab"])
 
-    def test_popover_anchor_native_vs_fallback_and_view_menu(self) -> None:
+    def test_popover_anchor_native_vs_fallback(self) -> None:
         body_html = r"""
 <button type="button" id="btn" popovertarget="stock-menu">Stock</button>
 <div id="stock-menu" class="lab-popup" popover
      data-controller="popover-anchor"></div>
-<details id="vm" class="lab-view-menu" data-controller="view-menu" open>
-  <summary id="vm-sum">Ansicht</summary>
-  <div>Controls</div>
-</details>
 """
         native = run_node_test(
             f"const h = createHarness({{\n"
@@ -1215,18 +1209,15 @@ process.stdout.write(JSON.stringify({
             r"""
 await h.flush();
 const pop = h.doc.getElementById("stock-menu");
-const vm = h.doc.getElementById("vm");
 h.fire(pop, "toggle", { newState: "open", bubbles: false });
 process.stdout.write(JSON.stringify({
   placed: pop.hasAttribute("data-placed"),
   left: pop.style.left || null,
   top: pop.style.top || null,
-  menuOpen: vm.open,
 }));
 """)
         self.assertEqual(
-            native,
-            {"placed": False, "left": None, "top": None, "menuOpen": False})
+            native, {"placed": False, "left": None, "top": None})
 
         for mode in ("all-false", "partial-true"):
             with self.subTest(mode=mode):
@@ -1248,13 +1239,11 @@ btn._rect = { left: 100, top: 150, right: 160, bottom: 174 };
 const pop = h.doc.getElementById("stock-menu");
 pop.offsetWidth = 200;
 pop.offsetHeight = 200;
-const vm = h.doc.getElementById("vm");
 h.fire(pop, "toggle", { newState: "open", bubbles: false });
 const openPos = {
   placed: pop.getAttribute("data-placed"),
   left: pop.style.left,
   top: pop.style.top,
-  menuOpen: vm.open,
 };
 btn._rect = { left: 120, top: 20, right: 180, bottom: 44 };
 h.fire(h.win, "resize");
@@ -1268,67 +1257,9 @@ process.stdout.write(JSON.stringify({
 """)
                 self.assertEqual(
                     fallback["openPos"],
-                    {"placed": "", "left": "100px", "top": "84px",
-                     "menuOpen": False})
+                    {"placed": "", "left": "100px", "top": "84px"})
                 self.assertEqual(fallback["resizedTop"], "52px")
                 self.assertEqual(fallback["afterCloseTop"], "52px")
-
-    def test_view_menu_outside_click_escape_and_reconnect(self) -> None:
-        result = run_node_test(r"""
-const h = createHarness({
-  bodyHtml: `
-    <div id="outside">Outside</div>
-    <details id="vm" class="lab-view-menu" data-controller="view-menu" open>
-      <summary id="vm-sum">Ansicht</summary>
-      <div id="inside">Body</div>
-    </details>
-  `,
-});
-await h.flush();
-const vm = h.doc.getElementById("vm");
-const outside = h.doc.getElementById("outside");
-const inside = h.doc.getElementById("inside");
-const sum = h.doc.getElementById("vm-sum");
-
-h.fire(inside, "click", { button: 0 });
-const openAfterInside = vm.open;
-h.fire(outside, "click", { button: 0 });
-const openAfterOutside = vm.open;
-
-vm.open = true;
-h.fire(h.doc.body, "keydown", { key: "Escape" });
-const openAfterEsc = vm.open;
-const focusedSummary = h.doc.activeElement === sum;
-
-vm.remove();
-await h.flush();
-vm.open = true;
-h.fire(outside, "click", { button: 0 });
-const openWhileDisconnected = vm.open;
-
-h.doc.body.appendChild(vm);
-await h.flush();
-let closeCount = 0;
-const origRemoveAttr = vm.removeAttribute.bind(vm);
-vm.removeAttribute = function (name) {
-  if (name === "open") closeCount += 1;
-  return origRemoveAttr(name);
-};
-h.fire(outside, "click", { button: 0 });
-process.stdout.write(JSON.stringify({
-  openAfterInside, openAfterOutside, openAfterEsc, focusedSummary,
-  openWhileDisconnected, openAfterReconnect: vm.open, closeCount,
-}));
-""")
-        self.assertEqual(result, {
-            "openAfterInside": True,
-            "openAfterOutside": False,
-            "openAfterEsc": False,
-            "focusedSummary": True,
-            "openWhileDisconnected": True,
-            "openAfterReconnect": False,
-            "closeCount": 1,
-        })
 
     def test_split_list_htmx_timing_abort_swap_and_reconnect(self) -> None:
         result = run_node_test(r"""
@@ -1351,7 +1282,7 @@ const h = createHarness({
     <div id="view-bar">
       <input type="radio" id="view-table" name="view" value="table" checked>
       <input type="radio" id="view-details" name="view" value="details">
-      <button type="button" id="cols-btn"
+      <button type="button" id="stray-btn"
               popovertarget="columns-menu">Columns</button>
     </div>
     <div id="layout" class="item-layout" data-controller="split-list"
@@ -1456,13 +1387,23 @@ tableRadio.checked = true;
 h.fire(tableRadio, "change");
 const beforeReconnectClick = h.htmxCalls.length;
 h.fire(row1, "click", { button: 0 });
+const reconnected = {
+  viewAfterReconnect: layout.getAttribute("data-view"),
+  viewTransitions,
+  triggersAddedOnReconnectClick: h.htmxCalls.length - beforeReconnectClick,
+};
+
+// 5. A button of a menu that is no longer here stays as it is.
+const strayButton = h.doc.getElementById("stray-btn");
+tableRadio.checked = false;
+detailsRadio.checked = true;
+h.fire(detailsRadio, "change");
+const strayDisabledInDetails = strayButton.disabled;
 
 process.stdout.write(JSON.stringify({
   whilePending, afterAbort, afterSuccess,
   viewWhileDisconnected, triggersWhileDisconnected,
-  viewAfterReconnect: layout.getAttribute("data-view"),
-  viewTransitions,
-  triggersAddedOnReconnectClick: h.htmxCalls.length - beforeReconnectClick,
+  ...reconnected, strayDisabledInDetails,
 }));
 """)
         self.assertEqual(result["whilePending"], {
@@ -1498,6 +1439,7 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["viewAfterReconnect"], "table")
         self.assertEqual(result["viewTransitions"], 1)
         self.assertEqual(result["triggersAddedOnReconnectClick"], 1)
+        self.assertIs(result["strayDisabledInDetails"], False)
 
     def test_split_list_selects_the_rows_of_a_main_table(self) -> None:
         result = run_node_test(r"""
@@ -1876,21 +1818,10 @@ process.stdout.write(JSON.stringify({
             "ariaSort": "ascending",
         })
 
-    def test_remember_and_batch_narrow_both_drivers(self) -> None:
+    def test_batch_narrow_both_drivers(self) -> None:
         result = run_node_test(r"""
 const h = createHarness({
-  storage: {
-    "orgsyndb:item-list:heat": "0",
-    "orgsyndb:item-list:row-height": "tight",
-  },
   bodyHtml: `
-    <input type="checkbox" id="heat" data-controller="remember"
-           data-remember="item-list:heat" checked>
-    <select id="height" data-controller="remember"
-            data-remember="item-list:row-height">
-      <option value="compact" selected>Compact</option>
-      <option value="tight">Tight</option>
-    </select>
     <form id="new-item-form">
       <input type="text" id="sub-in" name="substance" value="cinnamic-acid">
       <select id="batch-new" name="batch" data-controller="batch-narrow"
@@ -1942,21 +1873,6 @@ const h = createHarness({
 });
 await h.flush();
 
-const heat = h.doc.getElementById("heat");
-const height = h.doc.getElementById("height");
-const restoredRemember = {
-  heatChecked: heat.checked,
-  heightVal: height.value,
-};
-heat.checked = true;
-h.fire(heat, "change");
-height.value = "compact";
-h.fire(height, "change");
-const savedRemember = {
-  heat: h.localStorageObj.getItem("orgsyndb:item-list:heat"),
-  height: h.localStorageObj.getItem("orgsyndb:item-list:row-height"),
-};
-
 const groupsState = (sel) => sel.querySelectorAll("optgroup").map((g) => ({
   key: g.dataset.substance, hidden: g.hidden, disabled: g.disabled,
 }));
@@ -1993,16 +1909,9 @@ const afterRow0Change = {
 };
 
 process.stdout.write(JSON.stringify({
-  restoredRemember, savedRemember,
   initialNew, afterTextInput, initialNote, afterRow0Change,
 }));
 """)
-        self.assertEqual(
-            result["restoredRemember"],
-            {"heatChecked": False, "heightVal": "tight"})
-        self.assertEqual(
-            result["savedRemember"],
-            {"heat": "1", "height": "compact"})
         self.assertEqual(result["initialNew"], {
             "value": "b-ca",
             "groups": [
@@ -2067,17 +1976,15 @@ class TemplateWiringTests(PlanningCase):
         layout = root.find("div", cls="item-layout")
         self.assertIn("split-list", self.controllers(layout))
         self.assertEqual(layout.get("data-split-list-mode-value"), "htmx")
-        for pop_id in ("stock-menu", "more-filters", "columns-menu"):
+        for pop_id in ("stock-menu", "more-filters"):
             with self.subTest(popover=pop_id):
                 self.assertIn("popover-anchor",
                               self.controllers(root.find("div", id=pop_id)))
-        self.assertIn(
-            "view-menu",
-            self.controllers(root.find("details", cls="lab-view-menu")))
-        remembered = root.find_all(attrs={"data-remember": True})
-        self.assertTrue(remembered)
-        for control in remembered:
-            self.assertIn("remember", self.controllers(control))
+        self.assertIsNone(root.find("details", cls="lab-view-menu"))
+        self.assertEqual(root.find_all(attrs={"data-remember": True}), [])
+        used = set().union(*(self.controllers(node)
+                             for node in root.walk()))
+        self.assertFalse(used & {"view-menu", "remember"}, used)
 
     def test_item_page_movements_wiring(self) -> None:
         item = make_item(self.kl, "CH-0012", quantity=5)

@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from . import field_value, make_task, page, past, test_shell
+from .main_lists_support import stacked_controls
 from .test_inventory_dialogs import HTMX, RESTORE, vary_of
 from .test_inventory_live_lists import LiveListAssertions
 from .test_registry_pages import RegistryCase
@@ -164,6 +165,14 @@ class TaskListLiveTests(LivePageContractMixin, ListCase):
         return [tr.get("data-item") for tr in
                 root.find("tbody", id="item-rows").find_all("tr")]
 
+    def test_the_filter_controls_are_inline(self) -> None:
+        for kind, extra in (("plain", {}), ("htmx", HTMX)):
+            with self.subTest(kind=kind):
+                root = page(self.client.get(TASKS_URL, **extra))
+                form = root.find("form", id="filters")
+                self.assertTrue(form.find("select"))
+                self.assertEqual(stacked_controls(form), [])
+
     def test_live_filtering_and_canonical_push_url(self) -> None:
         """Scenario: Live filtering and canonical URL on the task list."""
         cases = [
@@ -289,6 +298,14 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
     def row_keys(self, root: Any) -> list[str]:
         return [tr.get("data-item") for tr in
                 root.find("tbody", id="item-rows").find_all("tr")]
+
+    def test_the_filter_controls_are_inline(self) -> None:
+        for kind, extra in (("plain", {}), ("htmx", HTMX)):
+            with self.subTest(kind=kind):
+                root = page(self.client.get("/lab/registry/", **extra))
+                form = root.find("form", id="filters")
+                self.assertTrue(form.find("select"))
+                self.assertEqual(stacked_controls(form), [])
 
     def assert_selected_option(
         self, root: Any, field: str, expected: str,

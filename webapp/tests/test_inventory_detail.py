@@ -23,6 +23,7 @@ from .inventory_support import (
     item_url,
     vessel_url,
 )
+from .main_lists_support import projected_marks
 from .test_inventory_table import body_rows
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
@@ -201,6 +202,7 @@ class DetailsOfAnItemTests(DetailCase):
                          "13")
         self.assertNotIn("projected",
                          definition(pane, "Ø Jahr").classes)
+        self.assertEqual(projected_marks(pane), [])
         self.assertTrue(has_number(pane.text(), "0,7"), pane.text())
 
     def test_means_there_are_not_show_a_dash(self) -> None:
@@ -210,14 +212,17 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertEqual(definition(pane, "Ø Jahr").text(), "–")
         self.assertEqual(definition(pane, "Ø Quartal").text(), "–")
 
-    def test_projected_means_are_marked(self) -> None:
+    def test_projected_means_are_not_marked(self) -> None:
         self.decoy()
         item = self.item("P-1", quantity=3)
         self.enter(item, 2026, 2, 6)
         pane = self.listed(item)
-        for term in ("Ø Jahr", "Ø Quartal"):
+        for term in ("Ø Jahr", "Ø Quartal", "Reichweite"):
             with self.subTest(term=term):
-                self.assertIn("projected", definition(pane, term).classes)
+                self.assertNotIn("projected", definition(pane, term).classes)
+                self.assertIsNone(definition(pane, term).get("title"))
+        self.assertNotEqual(definition(pane, "Ø Jahr").text(), "–")
+        self.assertEqual(projected_marks(pane), [])
 
     def test_the_locations_that_are_set(self) -> None:
         self.decoy()

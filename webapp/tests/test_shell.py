@@ -400,6 +400,29 @@ class RegistryShellTests(TestCase):
                     + ["/lab/static/lab.css"])
 
 
+class LabFrameWidthTests(SimpleTestCase):
+    """The main lists' pages use the full width right of the sidebar:
+    the application's stylesheet lifts the shell's cap from them."""
+
+    def rules(self) -> list[tuple[str, str]]:
+        text = re.sub(r"/\*.*?\*/", "",
+                      (REPO / "webapp" / "orgsyndb_web" / "static"
+                       / "lab.css").read_text(encoding="utf-8"),
+                      flags=re.DOTALL)
+        return [(" ".join(part.split()), body)
+                for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}",
+                                                 text)
+                for part in selector.split(",")]
+
+    def test_the_lab_frame_has_no_width_cap(self) -> None:
+        caps = [re.findall(r"(?<![-\w])max-width:\s*([^;}]+)", body)
+                for selector, body in self.rules()
+                if selector == "body.lab-frame"]
+        found = [value.strip() for values in caps for value in values]
+        self.assertIn("none", found)
+        self.assertEqual(set(found), {"none"})
+
+
 class StaticFilesTests(SimpleTestCase):
 
     def test_the_sites_stylesheets_are_collected(self) -> None:

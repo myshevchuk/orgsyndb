@@ -14,6 +14,7 @@ from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
                            NUMBERLESS, TASKS, SeededCase, noon,
                            opening, run, sample_chemicals, seed)
+from .main_lists_support import projected_marks
 from .planning_support import detail_pane, details
 from .registry_support import demo_registry
 from .widget_support import widget
@@ -376,7 +377,8 @@ class InventoryTests(SeededCase):
     def test_new_positions(self) -> None:
         """Scenario: New positions."""
         from inventory.models import Item
-        header, rows = table(self.get(ITEMS))
+        root = self.get(ITEMS)
+        header, rows = table(root)
         marked = {(row[header[1]].text().removesuffix("neu"),
                    row[header[3]].text())
                   for row in rows if row[header[1]].find("sup", "mark-new")}
@@ -385,7 +387,8 @@ class InventoryTests(SeededCase):
         size = next(row for row in rows
                     if row[header[0]].text() == "CH-0013"
                     and row[header[3]].text() == "1 g")
-        self.assertIn("projected", size["Ø Jahr"].classes)
+        self.assertNotIn("projected", size["Ø Jahr"].classes)
+        self.assertEqual(projected_marks(root), [])
         self.assertTrue(Item.objects.filter(status="discontinued").exists())
 
     def test_sizes_set_aside(self) -> None:

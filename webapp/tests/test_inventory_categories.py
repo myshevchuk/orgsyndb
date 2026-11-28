@@ -48,6 +48,7 @@ from .inventory_support import (
     vessel_url,
 )
 from .journal_support import entry_of, make_notebook
+from .main_lists_support import strong_columns
 from .test_inventory_detail import chosen_rows, pane_of
 from .test_inventory_dialogs import (
     HTMX,
@@ -231,6 +232,16 @@ class IntermediateListTests(InventoryCase):
         self.assertIn("T-021", source_text)
         self.assertLess(source_text.index("T-008"),
                         source_text.index("T-021"))
+
+    def test_the_substance_and_the_amount_are_strong(self) -> None:
+        sub = make_substance("acetophenone", "Acetophenone")
+        make_vessel(self.kl, substance=sub, unit="g", amount="5")
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Substanz", "Menge"], ["Substanz", "Menge"]))
+        cell = row_map(root)["acetophenone"]["Substanz"]
+        self.assertIn("Acetophenone", " ".join(
+            (cell.get("title") or "").split()))
 
     def test_heading_counts_and_substance_order(self) -> None:
         """Requirement: Lists by substance ("under the headings
@@ -622,6 +633,17 @@ class CommercialListTests(InventoryCase):
         self.assertEqual(row["Ort"].text(), "Kühlschrank 1 +1")
         self.assertEqual(row["Lieferanten"].text(), "Sigma-Aldrich +1")
         self.assertEqual(row["Angebrochen"].text(), "05.03.2026")
+
+    def test_the_substance_and_the_amount_are_strong(self) -> None:
+        sub = make_substance("benzaldehyde", "Benzaldehyde")
+        make_vessel(self.kl, substance=sub, unit="g", amount="5",
+                    source="bought", supplier="Sigma-Aldrich")
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Substanz", "Menge"], ["Substanz", "Menge"]))
+        cell = row_map(root)["benzaldehyde"]["Substanz"]
+        self.assertIn("Benzaldehyd", " ".join(
+            (cell.get("title") or "").split()))
 
     def test_filters_narrow_the_sums(self) -> None:
         """Scenario: Filters narrow the sums."""

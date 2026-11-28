@@ -16,21 +16,22 @@ from .inventory_support import (BATCHES, COMPOUND_PAGE, DELIVERIES, LEVELS,
                                 has_number, historical_line, item_url,
                                 note_blocks, note_url, num, vessel_url)
 from .journal_support import entry_of, make_notebook
+from .main_lists_support import projected_marks, strong_columns
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
-              "Bulk verfügbar", "Bemerkung"]
+              "Bulk verfügbar"]
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
               "Mean per year", "Delivered", "Coverage", "Compartment",
-              "Box", "Bulk available", "Note"]
+              "Box", "Bulk available"]
 BATCHES_DE = ["Charge", "Name", "Artikelnr.", "Herkunft", "Laborjournal",
               "Datum", "Ausbeute", "Bestand"]
 BATCHES_EN = ["Batch", "Name", "Article no.", "Source", "Lab notebook",
               "Date", "Yield", "Stock"]
 VESSELS_DE = ["Gefäß", "Name", "Artikelnr.", "Art", "Charge", "Herkunft",
-              "Menge", "Ort", "Datum", "Angebrochen", "Bemerkung"]
+              "Menge", "Ort", "Datum", "Angebrochen"]
 VESSELS_EN = ["Vessel", "Name", "Article no.", "Kind", "Batch", "Source",
-              "Amount", "Location", "Date", "Opened", "Note"]
+              "Amount", "Location", "Date", "Opened"]
 
 
 class ListCase(InventoryCase):
@@ -91,7 +92,16 @@ class ItemColumnTests(ListCase):
         self.assertEqual(num(row["Ø Jahr"]), 18)
         self.assertEqual(num(row["Abgegeben"]), 13)
         self.assertEqual(num(row["Reichweite"]), num("0,7"))
-        self.assertEqual(row["Bemerkung"].text(), "Notiz")
+        self.assertNotIn("Bemerkung", row)
+        self.assertNotIn("Notiz", [cell.text() for cell in row.values()])
+
+    def test_the_name_and_the_container_are_strong(self) -> None:
+        self.means_item("CH-0012", name="Zimtsäure")
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Name", "Gebinde"], ["Name", "Gebinde"]))
+        cell = table(root)[1][0]["Name"]
+        self.assertIn("Zimtsäure", cell.get("title") or "")
 
     def test_the_means_show_one_decimal_place(self) -> None:
         self.means_item("CH-0012")
@@ -320,15 +330,29 @@ class ItemListFurnishingTests(ListCase):
         self.enter_year(item, 2026, 8)
         late = datetime(2026, 12, 31, 23, 30, tzinfo=timezone.utc)
         with frozen(late):
-            row = self.rows()[0]
+            root = self.listing()
+        row = table(root)[1][0]
         self.assertEqual(num(row["Ø Jahr"]), 32)
         self.assertEqual(num(row["Abgegeben"]), 0)
-        self.assertNotIn("projected", row["Ø Jahr"].classes)
+        self.assertEqual(projected_marks(root), [])
         before = datetime(2026, 12, 31, 22, 30, tzinfo=timezone.utc)
         with frozen(before):
-            row = self.rows()[0]
-        self.assertIn("projected", row["Ø Jahr"].classes)
+            root = self.listing()
+        row = table(root)[1][0]
         self.assertEqual(num(row["Abgegeben"]), 32)
+        self.assertEqual(projected_marks(root), [])
+
+    def test_a_projected_mean_is_not_marked(self) -> None:
+        self.means_item("P-1")
+        self.item("P-2", quantity=3)
+        item = self.item("P-3", quantity=3)
+        self.enter(item, 2026, 2, 6)
+        root = self.listing()
+        by_article = {r["Artikelnr."].text(): r for r in table(root)[1]}
+        self.assertIsNotNone(num(by_article["P-3"]["Ø Jahr"]))
+        self.assertEqual(projected_marks(root), [])
+        self.assertNotIn("projected", by_article["P-3"]["Ø Jahr"].classes)
+        self.assertNotIn("projected", by_article["P-3"]["Reichweite"].classes)
 
 
 BULK = "/lab/inventory/end-products/bulk/"
@@ -423,6 +447,15 @@ class BatchListTests(InventoryCase):
         accept(language="en")
         self.batch()
         self.assertEqual(table(self.listing())[0], BATCHES_EN)
+
+    def test_the_name_and_the_stock_are_strong(self) -> None:
+        self.batch()
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Name", "Bestand"], ["Name", "Bestand"]))
+        cell = table(root)[1][0]["Name"]
+        self.assertTrue(cell.get("title"))
+        self.assertIn(cell.get("title"), cell.text())
 
     def test_batches_of_either_source(self) -> None:
         """Scenario: Batches of either source."""
@@ -632,7 +665,17 @@ class VesselListTests(InventoryCase):
         self.assertTrue(has_amount(row["Menge"].text(), "50", "mg"))
         self.assertEqual(row["Ort"].text(), "Kühlraum")
         self.assertEqual(row["Datum"].text(), "01.10.2026")
-        self.assertEqual(row["Bemerkung"].text(), "Rest")
+        self.assertNotIn("Bemerkung", row)
+        self.assertNotIn("Rest", [cell.text() for cell in row.values()])
+
+    def test_the_name_and_the_amount_are_strong(self) -> None:
+        self.item("CH-0012", name="Zimtsäure")
+        self.vessel("CH-0012", "mg", "50", number="B-1")
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Name", "Menge"], ["Name", "Menge"]))
+        cell = table(root)[1][0]["Name"]
+        self.assertEqual(cell.get("title"), "Zimtsäure")
 
     def test_the_source_and_the_supplier(self) -> None:
         self.vessel("X-1", number="B-M", source="made")

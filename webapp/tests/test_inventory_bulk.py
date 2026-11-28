@@ -33,6 +33,7 @@ from .inventory_support import (
     item_url,
     vessel_url,
 )
+from .main_lists_support import strong_columns
 
 BULK = "/lab/inventory/end-products/bulk/"
 COOKIE = "bulk-list-view"
@@ -253,6 +254,21 @@ class BulkListTests(BulkCase):
             ["/lab/registry/substances/neuverbindung-9/"])
         self.assertEqual(plain["Ort"].text(), "")
         self.assertEqual(plain["Datum"].text(), "")
+
+    def test_the_article_and_the_amount_are_strong(self) -> None:
+        self.item("CH-0012", size="100", unit="mg")
+        self.vessel("CH-0012", "mg", "50", number="B-1")
+        root = self.listing()
+        self.assertEqual(strong_columns(root),
+                         (["Artikel", "Menge"], ["Artikel", "Menge"]))
+
+    def test_the_name_in_the_article_cell_shows_whole_in_its_title(
+            self) -> None:
+        self.item("CH-0012", size="100", unit="mg")
+        self.vessel("CH-0012", "mg", "50", number="B-1")
+        cell = self.rows()[0]["Artikel"]
+        self.assertIn("(E)-Zimtsäure", " ".join(
+            (cell.get("title") or "").split()))
 
     def test_a_vessel_that_does_not_convert(self) -> None:
         """Scenario: A vessel that does not convert."""

@@ -20,7 +20,7 @@ from . import (Element, make_batch, make_task, make_vessel, page, past,
 from .demo_support import SeededCase
 from .inventory_support import InventoryCase
 from .main_lists_support import (HTMX, MAIN_LISTS, MainList, aria_sorts,
-                                 body_rows, head_cells, hidden_fields,
+                                 body_rows, cells, head_cells, hidden_fields,
                                  main_table, main_tables, marked, must_pane,
                                  lists_records, path_of, query_of, row_keys,
                                  unsorted_reasons)
@@ -471,6 +471,105 @@ class DetailsEndpointTests(MainListCase):
         self.assertIsNotNone(found)
         self.assertNotIn("data-item", found.attrs)
         self.assertTrue(found.text())
+
+
+# ---------------------------------------------------------------------------
+# One look
+
+
+class MainTableLookTests(MainListCase):
+    """The look all ten main tables share: bold columns, whole names in
+    the tooltip of a name that the screen cuts, and the planning list's
+    article on one line."""
+
+    LIMIT = 40
+
+    def columns(self, spec: MainList, root: Element) -> list[
+            tuple[str, Element, list[Element]]]:
+        """Each column of the main table as its key, its header and its
+        cells in the first LIMIT rows."""
+        rows = [cells(row) for row in body_rows(root)[:self.LIMIT]]
+        self.assertTrue(rows, spec.name)
+        for row in rows:
+            self.assertEqual(len(row), len(spec.keys), spec.name)
+        return [(key, head, [row[index] for row in rows])
+                for index, (key, head)
+                in enumerate(zip(spec.keys, head_cells(root)))]
+
+    @per_list
+    def test_the_header_and_cells_of_two_columns_are_strong(
+            self, spec: MainList) -> None:
+        for key, head, body in self.columns(spec, self.fetch(spec.path)):
+            with self.subTest(column=key):
+                strong = key in spec.strong
+                self.assertEqual("col-strong" in head.classes, strong)
+                for cell in body:
+                    self.assertEqual("col-strong" in cell.classes, strong,
+                                     cell.text())
+
+    @per_list
+    def test_a_capped_name_cell_shows_its_whole_name_in_its_title(
+            self, spec: MainList) -> None:
+        if not spec.capped:
+            return
+        found = 0
+        for key, _, body in self.columns(spec, self.fetch(spec.path)):
+            if key != spec.capped:
+                continue
+            for cell in body:
+                links = cell.find_all("a")
+                name = links[-1].text() if links else cell.text()
+                if not name:
+                    continue
+                found += 1
+                with self.subTest(name=name):
+                    title = cell.get("title")
+                    self.assertTrue(title, "the cell has no title")
+                    self.assertIn(name, " ".join(title.split()))
+        self.assertTrue(found, f"{spec.name} has no cell with a name")
+
+    def test_a_name_that_the_screen_cuts_shows_whole_in_the_title(
+            self) -> None:
+        """The longest name of the demo data set, in each list that has
+        capped cells, is in the title of its cell."""
+        for spec in MAIN_LISTS.values():
+            if not spec.capped:
+                continue
+            with self.subTest(list=spec.name):
+                root = self.fetch(spec.path)
+                names = []
+                for row in body_rows(root):
+                    cell = cells(row)[spec.keys.index(spec.capped)]
+                    links = cell.find_all("a")
+                    names.append((links[-1].text() if links
+                                  else cell.text(), cell))
+                longest, cell = max(names, key=lambda pair: len(pair[0]))
+                self.assertGreater(len(longest), 10)
+                self.assertIn(longest, " ".join(
+                    (cell.get("title") or "").split()))
+
+    def test_the_planning_article_is_one_line_number_first(self) -> None:
+        spec = MAIN_LISTS["planning"]
+        root = self.fetch(spec.path)
+        index = spec.keys.index("article")
+        rows = body_rows(root)
+        self.assertTrue(rows)
+        for row in rows[:self.LIMIT]:
+            number = row.get("data-item")
+            cell = cells(row)[index]
+            with self.subTest(number=number):
+                self.assertEqual(
+                    [e.tag for e in cell.walk() if "kv-sub" in e.classes],
+                    [])
+                self.assertEqual(
+                    [e.tag for e in cell.walk()
+                     if e.tag in ("br", "div", "p", "ul", "ol")], [])
+                text = cell.text()
+                links = cell.find_all("a")
+                self.assertTrue(links)
+                name = links[-1].text()
+                self.assertTrue(text.startswith(number), text)
+                self.assertLess(text.index(number), text.index(name))
 
 
 # ---------------------------------------------------------------------------

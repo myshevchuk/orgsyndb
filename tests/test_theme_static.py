@@ -187,6 +187,42 @@ class FacetIndentTests(unittest.TestCase):
             found, "screen.css indents no .facet-value by var(--depth)")
 
 
+class ShellAtTheLeftEdgeTests(unittest.TestCase):
+    """The sidebar sits at the window's left edge on every page: the
+    shell's body is not centred (site-theme: Navigation)."""
+
+    @staticmethod
+    def left_margin(declarations: list[Declaration]) -> str | None:
+        """The left margin that the unconditional rules for ``body``
+        give it, the last declaration winning."""
+        found = None
+        for decl in declarations:
+            if decl.context or "body" not in ps.selectors_of(decl):
+                continue
+            parts = ps.plain_value(decl.value).split()
+            if decl.prop == "margin" and parts:
+                found = parts[{1: 0, 2: 1, 3: 1}.get(len(parts), 3)]
+            elif decl.prop in ("margin-left", "margin-inline-start"):
+                found = parts[0] if parts else found
+        return found
+
+    def test_the_screen_body_is_not_centred(self) -> None:
+        declarations = [decl for name in ("base.css", "screen.css")
+                        for decl in css(name)]
+        self.assertIn(self.left_margin(declarations), ("0", "0px", "0rem"))
+
+    def test_the_screen_stylesheet_gives_the_body_its_left_margin(
+            self) -> None:
+        self.assertIn(self.left_margin(css("screen.css")),
+                      ("0", "0px", "0rem"))
+
+    def test_the_shell_keeps_its_cap_for_the_other_pages(self) -> None:
+        caps = [ps.plain_value(decl.value) for decl in css("screen.css")
+                if not decl.context and decl.prop == "max-width"
+                and "body" in ps.selectors_of(decl)]
+        self.assertEqual(caps, ["96rem"])
+
+
 class RowDetailsTests(unittest.TestCase):
     def test_details_show_only_in_the_details_view(self) -> None:
         """Requirement: Details view (screen stylesheet)."""

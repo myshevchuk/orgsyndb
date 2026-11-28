@@ -28,7 +28,11 @@ class MainList:
     DESCENDING whether it runs descending; COOKIE the name of the view
     cookie and OPENS the view the list opens in without one; DETAILS
     gives the path of the details of the record whose key is its
-    argument; COUNT the id of the element that shows the list's count.
+    argument; COUNT the id of the element that shows the list's count;
+    STRONG the keys of the columns whose header and cells are bold, the
+    column that names the record first; CAPPED the key of the column
+    whose cells hold a name that the screen cuts and a ``title`` shows
+    whole, empty for a list without one.
     """
 
     name: str
@@ -42,6 +46,8 @@ class MainList:
     descending: bool = False
     opens: str = "table"
     searches: tuple[str, ...] = ("q",)
+    strong: tuple[str, ...] = ()
+    capped: str = ""
 
     @property
     def sorted_keys(self) -> list[str]:
@@ -57,67 +63,74 @@ MAIN_LISTS: dict[str, MainList] = {spec.name: spec for spec in (
     MainList(
         "item", "/lab/inventory/end-products/",
         ("number", "name", "category", "container", "stock", "mean_year",
-         "this_year", "coverage", "compartment", "box", "bulk", "note"),
+         "this_year", "coverage", "compartment", "box", "bulk"),
         "category", "item-list-view",
-        _under("/lab/inventory/items/", "detail/"), "item-count"),
+        _under("/lab/inventory/items/", "detail/"), "item-count",
+        strong=("name", "container"), capped="name"),
     MainList(
         "bulk", "/lab/inventory/end-products/bulk/",
         ("article", "vessel", "batch", "source", "amount", "location",
          "date", "fills"),
         "article", "bulk-list-view",
         _under("/lab/inventory/end-products/bulk/"), "bulk-count",
-        unsorted=frozenset({"fills"})),
+        unsorted=frozenset({"fills"}), strong=("article", "amount"),
+        capped="article"),
     MainList(
         "delivery", "/lab/inventory/deliveries/",
         ("number", "date", "recipient", "lines", "contents"),
         "date", "delivery-list-view",
         _under("/lab/inventory/deliveries/", "detail/"), "note-count",
-        unsorted=frozenset({"contents"}), descending=True),
+        unsorted=frozenset({"contents"}), descending=True,
+        strong=("number", "recipient")),
     MainList(
         "intermediate", "/lab/inventory/intermediates/",
         ("substance", "amount", "vessels", "location", "source", "age"),
         "substance", "intermediate-list-view",
-        _under("/lab/inventory/intermediates/"), "category-count"),
+        _under("/lab/inventory/intermediates/"), "category-count",
+        strong=("substance", "amount"), capped="substance"),
     MainList(
         "chemical", "/lab/inventory/chemicals/",
         ("substance", "group", "amount", "vessels", "location",
          "suppliers", "opened"),
         "substance", "chemical-list-view",
-        _under("/lab/inventory/chemicals/"), "category-count"),
+        _under("/lab/inventory/chemicals/"), "category-count",
+        strong=("substance", "amount"), capped="substance"),
     MainList(
         "batch", "/lab/inventory/batches/",
         ("batch", "name", "article", "source", "notebook", "date",
          "yield", "stock"),
         "date", "batch-list-view",
         _under("/lab/inventory/batches/", "detail/"), "batch-count",
-        descending=True),
+        descending=True, strong=("name", "stock"), capped="name"),
     MainList(
         "vessel", "/lab/inventory/vessels/",
         ("vessel", "name", "article", "kind", "batch", "source", "amount",
-         "location", "date", "opened", "note"),
+         "location", "date", "opened"),
         "name", "vessel-list-view",
         _under("/lab/inventory/vessels/", "detail/"), "vessel-count",
-        searches=()),
+        searches=(), strong=("name", "amount"), capped="name"),
     MainList(
         "planning", "/lab/planning/",
         ("article", "runway", "synthesis", "start", "priority", "tasks",
          "actions"),
         "start", "planning-list-view",
         lambda number: f"/lab/planning/{number}/detail/", "planning-count",
-        unsorted=frozenset({"actions"}), opens="details", searches=()),
+        unsorted=frozenset({"actions"}), opens="details", searches=(),
+        strong=("article", "start"), capped="article"),
     MainList(
         "task", "/lab/tasks/",
         ("number", "product", "priority", "assignee", "started", "ended",
          "progress", "batch", "report", "qc", "state"),
         "priority", "task-list-view",
-        _under("/lab/tasks/", "detail/"), "task-counts"),
+        _under("/lab/tasks/", "detail/"), "task-counts",
+        strong=("product", "priority"), capped="product"),
     MainList(
         "substance", "/lab/registry/",
         ("name", "key", "short_name", "group", "classes", "formula",
          "molar_mass", "article"),
         "name", "substance-list-view",
         _under("/lab/registry/substances/", "detail/"),
-        "substance-count"),
+        "substance-count", strong=("name", "article"), capped="name"),
 )}
 
 BY_PATH = {spec.path: spec for spec in MAIN_LISTS.values()}
@@ -357,3 +370,58 @@ def key_number(key: str | None) -> Decimal:
     assert key not in (None, ""), "the cell has no sort key"
     assert re.fullmatch(r"-?\d+(?:[.,]\d+)?", key), f"{key!r} is no number"
     return Decimal(key.replace(",", "."))
+
+
+PROJECTED_MARKS = ("hochgerechnet aus dem laufenden Jahr",
+                   "projected from the current year")
+
+
+def projected_marks(root: Element) -> list[str]:
+    """What marks a figure of ROOT as projected: each element that
+    carries the class ``projected`` or a ``title`` that explains the
+    mark, and each of the mark's texts shown on the page, in either
+    language. Empty when the page shows no such mark."""
+    found = [f"<{node.tag}> {sorted(node.classes)}"
+             for node in root.walk()
+             if "projected" in node.classes
+             or any(text in (node.get("title") or "")
+                    for text in PROJECTED_MARKS)]
+    found += [text for text in PROJECTED_MARKS if text in root.text()]
+    return found
+
+
+def stacked_controls(form: Element) -> list[str]:
+    """The controls of the filter form FORM that are not inline: each
+    select that is not in a ``label.lab-inline-select`` with its
+    ``span.lab-field-prefix``, and each search field that is not in a
+    ``label.lab-inline-field`` whose text sits in a
+    ``span.visually-hidden``. Empty when every control is inline."""
+    found = []
+    for select in form.find_all("select"):
+        label = select.parent
+        if (label is None or label.tag != "label"
+                or "lab-inline-select" not in label.classes
+                or label.find("span", cls="lab-field-prefix") is None):
+            found.append(f"select {select.get('name')}")
+    for search in form.find_all("input", type="search"):
+        label = search.parent
+        if (label is None or label.tag != "label"
+                or "lab-inline-field" not in label.classes
+                or label.find("span", cls="visually-hidden") is None):
+            found.append(f"search {search.get('name')}")
+    return found
+
+
+def strong_columns(root: Element) -> tuple[list[str], list[str]]:
+    """The texts of the headers of the main table that carry
+    ``col-strong``, and the texts of the headers of the columns whose
+    cells in the body all carry it."""
+    names = [th.text(lambda node: node.tag == "small")
+             for th in head_cells(root)]
+    rows = [cells(row) for row in body_rows(root)]
+    heads = [name for name, th in zip(names, head_cells(root))
+             if "col-strong" in th.classes]
+    found = [name for index, name in enumerate(names)
+             if rows and all("col-strong" in row[index].classes
+                             for row in rows)]
+    return heads, found

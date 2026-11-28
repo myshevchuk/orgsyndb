@@ -194,8 +194,13 @@ class TableStyleTests(SimpleTestCase):
             with self.subTest(selector=name):
                 self.assertRegex(text, rf"(?<![\w-]){re.escape(name)}\b")
 
-    def test_the_main_table_has_a_fill_modifier(self) -> None:
-        self.assertRegex(stripped(CSS), r"\.col-fill\b")
+    def test_the_main_table_has_a_strong_modifier_and_no_fill_one(
+            self) -> None:
+        text = stripped(CSS)
+        self.assertRegex(text, r"\.col-strong\b")
+        for name in (".col-fill", ".col-note"):
+            with self.subTest(selector=name):
+                self.assertNotRegex(text, rf"{re.escape(name)}\b")
 
     def test_the_removed_table_classes_are_styled_no_more(self) -> None:
         text = stripped(CSS)

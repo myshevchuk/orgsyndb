@@ -118,6 +118,17 @@ class DetailsOfAVesselTests(VesselDetailsCase):
         for shown in ("Endprodukt", "250 mg", "Regal 3", "Rest vom Ansatz"):
             self.assertIn(shown, text)
 
+    def test_the_note_is_in_the_details_and_not_in_the_table(self) -> None:
+        self.item("CH-0012")
+        vessel = make_vessel(self.kl, article="CH-0012", unit="mg",
+                             amount="250", note="Rest vom Ansatz")
+        root = self.listed(vessel)
+        self.assertIn("Rest vom Ansatz", must_pane(root).text())
+        head = root.find(id="item-head")
+        self.assertNotIn("Bemerkung", [th.text() for th in
+                                       head.find_all("th")])
+        self.assertNotIn("Rest vom Ansatz", root.find(id="item-rows").text())
+
     def test_the_opening_of_a_bought_vessel(self) -> None:
         opened = self.bought()
         sealed = make_vessel(self.kl, article="benzaldehyde",
